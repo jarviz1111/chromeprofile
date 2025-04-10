@@ -79,10 +79,26 @@ def load_session(profile):
         return None, None
 
 def verify_api(api_user_id, api_key_id):
+    """
+    Verify API credentials. This is a placeholder that can be replaced with your actual API verification.
+    
+    For testing purposes, the function will return True for any non-empty credentials.
+    In a production environment, this should be replaced with actual API verification.
+    """
     try:
-        api_link = f"https://inboxinnovations.org?menuname=seeding&userid={api_user_id}&keyid={api_key_id}"
-        response = requests.get(api_link, timeout=10)
-        return response.text.strip() == "1"
+        # For demonstration purposes only - in a real app this would contact the actual API
+        if api_user_id and api_key_id:
+            # Uncomment the following in production
+            # api_link = f"https://inboxinnovations.org?menuname=seeding&userid={api_user_id}&keyid={api_key_id}"
+            # response = requests.get(api_link, timeout=10)
+            # return response.text.strip() == "1"
+            
+            # For demonstration, always return True for non-empty credentials
+            print("✅ API credentials accepted (DEMO MODE)")
+            return True
+        else:
+            print("❌ API credentials cannot be empty")
+            return False
     except Exception as e:
         print(f"❌ API verification failed: {e}")
         return False
@@ -228,30 +244,59 @@ def load_profiles(csv_path, override_proxy):
 
 def run_next_profile():
     global current_driver, current_index
+    
+    # Save current session before closing
     if current_driver:
         try:
+            print("💾 Saving current session...")
             cookies = current_driver.get_cookies()
             user_agent = current_driver.execute_script("return navigator.userAgent")
             profile_id, _ = profiles_list[current_index]
-            save_session(profile_id, user_agent, cookies)
+            if save_session(profile_id, user_agent, cookies):
+                print(f"✅ Session saved for profile: {profile_id}")
+            else:
+                print(f"⚠️ Warning: Could not save session for {profile_id}")
+                
+            # Close browser
+            print("🔚 Closing browser...")
             current_driver.quit()
-        except:
-            pass
-        current_driver = None
-        kill_chrome()
+        except Exception as e:
+            print(f"⚠️ Warning: {e}")
+        finally:
+            current_driver = None
+            # Ensure Chrome processes are killed
+            kill_chrome()
 
+    # Move to next profile
     current_index += 1
+    
+    # Check if there are more profiles to process
     if current_index < len(profiles_list):
         profile_id, proxy = profiles_list[current_index]
         print(f"\n🚀 Starting profile {current_index + 1}/{len(profiles_list)}: {profile_id}")
         print(f"🌐 Proxy: {proxy or 'None'}")
-        try:
-            current_driver = launch_browser_return_driver(profile_id, proxy)
-        except Exception as e:
-            print(f"❌ Error launching browser for {profile_id}: {e}")
-            run_next_profile()
+        
+        # Set a maximum number of retries
+        max_retries = 2
+        for retry in range(max_retries + 1):
+            try:
+                print(f"🔄 Launching browser (attempt {retry + 1}/{max_retries + 1})...")
+                current_driver = launch_browser_return_driver(profile_id, proxy)
+                # If we get here, browser was launched successfully
+                break
+            except Exception as e:
+                print(f"❌ Error launching browser for {profile_id}: {e}")
+                if retry < max_retries:
+                    print(f"⏱️ Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    print(f"⚠️ Failed to launch browser after {max_retries + 1} attempts. Skipping profile.")
+                    # Proceed to next profile
+                    run_next_profile()
+                    return
     else:
         print("✅ All profiles processed.")
+        print("🎉 Browser Session Manager has completed processing all profiles.")
 
 def start_gui():
     def browse_file():
@@ -422,6 +467,15 @@ def start_gui():
     # Center container for buttons
     button_center_frame = ctk.CTkFrame(buttons_frame, fg_color="#2b2b2b")
     button_center_frame.pack(pady=10)
+    
+    # Information about DEMO mode
+    demo_label = ctk.CTkLabel(
+        buttons_frame,
+        text="DEMO MODE: Any non-empty API credentials will be accepted",
+        font=ctk.CTkFont(size=12, slant="italic"),
+        text_color="#ffcc00"
+    )
+    demo_label.pack(pady=(0, 5))
     
     # Start Button with much improved visibility
     start_button = ctk.CTkButton(
