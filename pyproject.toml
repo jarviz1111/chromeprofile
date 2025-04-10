@@ -1,0 +1,14 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "fake-useragent>=2.1.0",
+    "psutil>=7.0.0",
+    "requests>=2.32.3",
+    "selenium>=4.31.0",
+    "ttkthemes>=3.2.2",
+    "undetected-chromedriver>=3.5.5",
+]

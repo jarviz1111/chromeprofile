@@ -1,0 +1,52 @@
+modules = ["python-3.11"]
+
+[nix]
+channel = "stable-24_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Browser Session Manager"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "browser_session_manager"
+
+[[workflows.workflow]]
+name = "Browser Session Manager"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pip install undetected-chromedriver selenium fake-useragent customtkinter ttkthemes psutil requests && python main.py"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "browser_session_manager"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[deployment]
+run = ["sh", "-c", "pip install undetected-chromedriver selenium fake-useragent customtkinter ttkthemes psutil requests && python main.py"]
