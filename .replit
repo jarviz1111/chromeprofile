@@ -19,6 +19,10 @@ args = "Browser Session Manager"
 task = "workflow.run"
 args = "browser_session_manager"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "standalone_browser_manager"
+
 [[workflows.workflow]]
 name = "Browser Session Manager"
 author = "agent"
@@ -47,6 +51,20 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+
+[[workflows.workflow]]
+name = "standalone_browser_manager"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main_standalone.py"
 
 [deployment]
 run = ["sh", "-c", "pip install undetected-chromedriver selenium fake-useragent customtkinter ttkthemes psutil requests && python main.py"]
