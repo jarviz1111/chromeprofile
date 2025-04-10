@@ -67,4 +67,4 @@ task = "shell.exec"
 args = "python main_standalone.py"
 
 [deployment]
-run = ["sh", "-c", "pip install undetected-chromedriver selenium fake-useragent customtkinter ttkthemes psutil requests && python main.py"]
+run = ["sh", "-c", "python main.py"]
