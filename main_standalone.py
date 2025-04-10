@@ -308,7 +308,8 @@ def start_gui():
     # Create the main window
     root = ctk.CTk()
     root.title("Browser Session Manager")
-    root.geometry("800x700")
+    root.geometry("900x800")  # Increased window size for better visibility
+    root.minsize(800, 700)    # Set minimum window size
     root.configure(fg_color="#2b2b2b")
     root.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -414,31 +415,45 @@ def start_gui():
         placeholder_text="Example: 123.456.789.012:8080 or user:pass@123.456.789.012:8080"
     ).pack(pady=5)
 
-    # Buttons Frame
-    buttons_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-    buttons_frame.pack(fill="x", padx=10, pady=10)
-
-    ctk.CTkButton(
-        buttons_frame,
-        text="Start Processing",
+    # Buttons Frame - Changed to center align buttons with better spacing
+    buttons_frame = ctk.CTkFrame(main_frame, fg_color="#2b2b2b")
+    buttons_frame.pack(fill="x", padx=10, pady=15)
+    
+    # Center container for buttons
+    button_center_frame = ctk.CTkFrame(buttons_frame, fg_color="#2b2b2b")
+    button_center_frame.pack(pady=10)
+    
+    # Start Button with much improved visibility
+    start_button = ctk.CTkButton(
+        button_center_frame,
+        text="START PROCESSING",
         command=lambda: threading.Thread(target=run_process).start(),
-        width=200,
-        height=40,
-        font=ctk.CTkFont(size=14, weight="bold"),
+        width=250,
+        height=50,
+        font=ctk.CTkFont(size=16, weight="bold"),
         fg_color="#28a745",
-        hover_color="#218838"
-    ).pack(side="left", padx=5)
+        hover_color="#218838",
+        border_width=2,
+        border_color="#1e7e34",
+        corner_radius=10
+    )
+    start_button.pack(side="left", padx=20, pady=10)
 
-    ctk.CTkButton(
-        buttons_frame,
-        text="Next Profile ▶",
+    # Next Profile Button with much improved visibility
+    next_button = ctk.CTkButton(
+        button_center_frame,
+        text="NEXT PROFILE ▶",
         command=lambda: threading.Thread(target=run_next_profile).start(),
-        width=200,
-        height=40,
-        font=ctk.CTkFont(size=14, weight="bold"),
+        width=250,
+        height=50,
+        font=ctk.CTkFont(size=16, weight="bold"),
         fg_color="#007bff",
-        hover_color="#0056b3"
-    ).pack(side="left", padx=5)
+        hover_color="#0056b3",
+        border_width=2,
+        border_color="#0062cc",
+        corner_radius=10
+    )
+    next_button.pack(side="left", padx=20, pady=10)
 
     # Console Frame
     console_frame = ctk.CTkFrame(main_frame, fg_color="#363636")
