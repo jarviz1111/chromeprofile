@@ -10,6 +10,7 @@ from flask import Flask, render_template_string
 from gui.app import BrowserSessionManagerApp
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SESSION_SECRET', os.urandom(24))
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -37,12 +38,12 @@ def home():
 
 def main():
     """Main entry point for the Browser Session Manager application."""
-    if os.environ.get('REPL_SLUG'): # Running in deployment
+    if os.environ.get('REPL_SLUG'):  # Running in deployment
         port = int(os.environ.get('PORT', 8080))
         app.run(host='0.0.0.0', port=port)
-    else: # Running in development
-        app = BrowserSessionManagerApp()
-        app.run()
+    else:  # Running in development
+        browser_app = BrowserSessionManagerApp()
+        browser_app.run()
 
 if __name__ == "__main__":
     main()
