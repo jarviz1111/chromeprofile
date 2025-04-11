@@ -234,7 +234,8 @@ app.post('/start-processing', (req, res) => {
 
 // Start the server
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Browser Session Manager server running at http://localhost:${port}`);
+  console.log(`🚀 Browser Session Manager server running on port ${port}`);
+  console.log(`Access the web interface using the "Show" button in Replit or via the webview tab`);
   console.log('Please upload a CSV file with profiles and enter your API credentials in the web interface.');
 });
 
