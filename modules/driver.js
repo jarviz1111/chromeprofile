@@ -158,7 +158,10 @@ async function launchBrowser(profileId, proxy = null) {
     browser = {
       pages: () => [page],
       close: () => Promise.resolve(),
-      cookies: () => Promise.resolve(simulatedCookies)
+      cookies: async () => {
+        console.log('📄 Returning simulated cookies');
+        return simulatedCookies;
+      }
     };
     
     console.log('✅ Using simulated browser mode');

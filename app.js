@@ -161,8 +161,26 @@ app.post('/process-next', async (req, res) => {
   if (currentDriver) {
     try {
       console.log('Saving current session...');
-      const cookies = await currentDriver.cookies();
-      const userAgent = await currentDriver.evaluate(() => navigator.userAgent);
+      let cookies = [];
+      let userAgent = '';
+      
+      try {
+        // In simulated mode, currentDriver might not have these methods
+        if (typeof currentDriver.cookies === 'function') {
+          cookies = await currentDriver.cookies();
+        }
+        
+        if (typeof currentDriver.evaluate === 'function') {
+          userAgent = await currentDriver.evaluate(() => navigator.userAgent);
+        } else {
+          // Use a default user agent when in simulated mode
+          userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+        }
+      } catch (error) {
+        console.log(`Warning: Error getting browser data: ${error.message}`);
+        // Continue with default/empty values
+      }
+      
       const profileId = profilesList[currentIndex].profileId;
       
       const saveResult = await saveSession(profileId, userAgent, cookies);
