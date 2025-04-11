@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Browser Session Manager</h1>
+    </header>
+    
+    <main>
+      <section class="api-credentials-section">
+        <h2>API Credentials</h2>
+        <div class="form-group">
+          <label for="apiUserId">API User ID:</label>
+          <input type="text" id="apiUserId" name="apiUserId" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="apiKeyId">API Key:</label>
+          <input type="password" id="apiKeyId" name="apiKeyId" class="form-control">
+        </div>
+      </section>
+      
+      <section class="file-section">
+        <h2>Select CSV File</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="csvFile">CSV File:</label>
+            <div class="file-input-wrapper">
+              <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control">
+              <span id="fileNameDisplay">No file selected</span>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="globalProxy">Global Proxy (Optional):</label>
+            <input type="text" id="globalProxy" name="globalProxy" placeholder="Example: 123.456.789.012:8080 or user:pass@123.456.789.012:8080" class="form-control">
+          </div>
+        </form>
+      </section>
+      
+      <div class="demo-mode-notice">
+        <p>DEMO MODE: Any non-empty API credentials will be accepted</p>
+      </div>
+      
+      <section class="buttons-section">
+        <button id="startProcessingBtn" class="btn btn-primary">START PROCESSING</button>
+        <button id="nextProfileBtn" class="btn btn-secondary">NEXT PROFILE ▶</button>
+      </section>
+      
+      <section class="progress-section" id="progressSection" style="display: none;">
+        <h2>Processing Progress</h2>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <p id="progressText">0/0 profiles processed</p>
+        <p id="currentProfileText"></p>
+      </section>
+      
+      <section class="console-section">
+        <h2>Process Log</h2>
+        <div class="console" id="console"></div>
+      </section>
+      
+      <section class="profiles-section">
+        <h2>Saved Profiles</h2>
+        <div class="profiles-list" id="profilesList">
+          <% if (profiles && profiles.length > 0) { %>
+            <table>
+              <thead>
+                <tr>
+                  <th>Profile ID</th>
+                  <th>Last Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% profiles.forEach(function(profile) { %>
+                  <tr>
+                    <td><%= profile.profile_id %></td>
+                    <td><%= new Date(profile.last_updated).toLocaleString() %></td>
+                    <td>
+                      <button class="btn-small btn-danger delete-profile" data-profile-id="<%= profile.profile_id %>">Delete</button>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          <% } else { %>
+            <p>No saved profiles found</p>
+          <% } %>
+        </div>
+      </section>
+    </main>
+    
+    <footer>
+      <p>&copy; 2025 Browser Session Manager</p>
+    </footer>
+  </div>
+  
+  <script src="/js/script.js"></script>
+</body>
+</html>
