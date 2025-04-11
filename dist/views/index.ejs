@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Browser Session Manager</h1>
+    </header>
+    
+    <main>
+      <div class="setup-container">
+        <!-- API Credentials Section -->
+        <section class="api-credentials-section">
+          <h2>1. Enter API Credentials</h2>
+          <div class="form-group">
+            <label for="apiUserId">API User ID: <span class="required">*</span></label>
+            <input type="text" id="apiUserId" name="apiUserId" class="form-control" placeholder="Enter your API User ID">
+            <small class="form-hint">Your unique identifier for API access</small>
+          </div>
+          <div class="form-group">
+            <label for="apiKeyId">API Key: <span class="required">*</span></label>
+            <input type="password" id="apiKeyId" name="apiKeyId" class="form-control" placeholder="Enter your API Key">
+            <small class="form-hint">Your secret key for API authentication</small>
+          </div>
+        </section>
+        
+        <!-- File Upload Section -->
+        <section class="file-section">
+          <h2>2. Upload Profile Data</h2>
+          <form id="uploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+              <label for="csvFile">CSV File: <span class="required">*</span></label>
+              <div class="file-input-container">
+                <div class="file-input-wrapper">
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control">
+                  <button type="button" id="browseButton" class="browse-btn">Browse Files</button>
+                </div>
+                <div class="file-display">
+                  <span id="fileNameDisplay">No file selected</span>
+                  <a href="/sample_profiles.csv" download class="download-sample">Download Sample CSV</a>
+                </div>
+              </div>
+              <small class="form-hint">CSV with columns: profile_id, proxy (optional)</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="globalProxy">Global Proxy (Optional):</label>
+              <input type="text" id="globalProxy" name="globalProxy" class="form-control" 
+                placeholder="Example: 123.456.789.012:8080 or user:pass@123.456.789.012:8080">
+              <small class="form-hint">Override individual proxy settings from CSV with a global proxy</small>
+            </div>
+          </form>
+        </section>
+      </div>
+      
+      <div class="demo-mode-notice">
+        <p>DEMO MODE: Any non-empty API credentials will be accepted</p>
+      </div>
+      
+      <section class="buttons-section">
+        <button id="startProcessingBtn" class="btn btn-primary">START PROCESSING</button>
+        <button id="nextProfileBtn" class="btn btn-secondary">NEXT PROFILE ▶</button>
+      </section>
+      
+      <section class="progress-section" id="progressSection" style="display: none;">
+        <h2>Processing Progress</h2>
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <p id="progressText">0/0 profiles processed</p>
+        <p id="currentProfileText"></p>
+      </section>
+      
+      <section class="console-section">
+        <h2>Process Log</h2>
+        <div class="console" id="console"></div>
+      </section>
+      
+      <section class="profiles-section">
+        <h2>Saved Profiles</h2>
+        <div class="profiles-list" id="profilesList">
+          <% if (profiles && profiles.length > 0) { %>
+            <table>
+              <thead>
+                <tr>
+                  <th>Profile ID</th>
+                  <th>Last Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% profiles.forEach(function(profile) { %>
+                  <tr>
+                    <td><%= profile.profile_id %></td>
+                    <td><%= new Date(profile.last_updated).toLocaleString() %></td>
+                    <td>
+                      <button class="btn-small btn-danger delete-profile" data-profile-id="<%= profile.profile_id %>">Delete</button>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          <% } else { %>
+            <p>No saved profiles found</p>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="database-section">
+        <h2>Database Information</h2>
+        <div class="database-info" id="databaseInfo">
+          <div class="database-status-badge">
+            <span class="badge" id="dbStatusBadge">Checking...</span>
+          </div>
+
+          <div class="database-details" id="dbDetails">
+            <p>Database Type: <span id="dbType">PostgreSQL</span></p>
+            <p>Status: <span id="dbStatus">Checking connection...</span></p>
+            <p>Server Time: <span id="dbServerTime">-</span></p>
+          </div>
+
+          <button id="checkDbBtn" class="btn-small">Check Connection</button>
+        </div>
+      </section>
+    </main>
+    
+    <footer>
+      <p>&copy; 2025 Browser Session Manager</p>
+    </footer>
+  </div>
+  
+  <script src="/js/script.js"></script>
+</body>
+</html>

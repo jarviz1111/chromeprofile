@@ -1,0 +1,36 @@
+{
+  "appId": "com.inboxinnovations.browsersessionmanager",
+  "productName": "Browser Session Manager",
+  "copyright": "Copyright © 2025 Inbox Innovations",
+  "icon": "generated-icon.png",
+  "files": [
+    "**/*",
+    "!browser_profiles/*",
+    "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+    "!node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+    "!node_modules/.bin",
+    "!dist/**/*",
+    "!build/**/*",
+    "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}"
+  ],
+  "directories": {
+    "buildResources": ".",
+    "output": "dist"
+  },
+  "mac": {
+    "category": "public.app-category.productivity",
+    "target": ["dmg"]
+  },
+  "win": {
+    "target": ["nsis"]
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "category": "Utility"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true
+  }
+}
