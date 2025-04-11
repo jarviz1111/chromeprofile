@@ -4,16 +4,18 @@
  * Specialized for Replit environment
  */
 
-const puppeteer = require('puppeteer-core');
+const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const { loadSession, saveSession } = require('./session_pg');
-const puppeteerExtra = require('puppeteer-extra');
 
 // Apply stealth plugin to make automation less detectable
 puppeteerExtra.use(StealthPlugin());
+
+// Use puppeteer-extra instead of plain puppeteer to get stealth features
+const puppeteer = puppeteerExtra;
 
 // Constants
 const LOGIN_URL = 'https://accounts.google.com/signup';
@@ -126,13 +128,13 @@ async function launchBrowser(profileId, proxy = null) {
   let browser, page;
   
   try {
-    // Try to launch with puppeteer-core first
-    console.log('🔧 Attempting to launch with puppeteer-core...');
+    // Try to launch with full puppeteer that has its own bundled Chrome
+    console.log('🔧 Attempting to launch with full puppeteer and bundled Chrome...');
     browser = await puppeteer.launch(launchOptions);
     page = (await browser.pages())[0];
-    console.log('✅ Browser launched successfully with puppeteer-core');
+    console.log('✅ Browser launched successfully with puppeteer');
   } catch (error) {
-    console.log(`⚠️ Could not launch browser with puppeteer-core: ${error.message}`);
+    console.log(`⚠️ Could not launch browser with puppeteer: ${error.message}`);
     console.log('🔧 Falling back to simulated browser mode...');
     
     // Create a simulated browser object that responds to the same methods
