@@ -10,6 +10,7 @@ dependencies = [
     "psutil>=7.0.0",
     "requests>=2.32.3",
     "selenium>=4.31.0",
+    "trafilatura>=2.0.0",
     "ttkthemes>=3.2.2",
     "undetected-chromedriver>=3.5.5",
 ]
