@@ -26,6 +26,7 @@ function initDb() {
   db = new sqlite3.Database(DB_PATH);
   
   db.serialize(() => {
+    // Create the table if it doesn't exist
     db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         profile_id TEXT PRIMARY KEY,
@@ -34,6 +35,28 @@ function initDb() {
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Check if the table is empty, and if so, create a sample entry
+    db.get("SELECT count(*) as count FROM sessions", (err, row) => {
+      if (err) {
+        console.error("Error checking sessions table:", err.message);
+        return;
+      }
+      
+      if (row && row.count === 0) {
+        console.log("📊 Creating sample profile entry for testing...");
+        // Create a sample entry for testing
+        db.run(`
+          INSERT INTO sessions (profile_id, user_agent, cookies, last_updated)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        `, 
+        [
+          "sample_profile", 
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          JSON.stringify([{"name": "sample_cookie", "value": "test_value", "domain": ".example.com"}])
+        ]);
+      }
+    });
   });
   
   console.log(`✅ Database initialized at ${DB_PATH}`);

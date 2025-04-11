@@ -13,35 +13,50 @@
     </header>
     
     <main>
-      <section class="api-credentials-section">
-        <h2>API Credentials</h2>
-        <div class="form-group">
-          <label for="apiUserId">API User ID:</label>
-          <input type="text" id="apiUserId" name="apiUserId" class="form-control">
-        </div>
-        <div class="form-group">
-          <label for="apiKeyId">API Key:</label>
-          <input type="password" id="apiKeyId" name="apiKeyId" class="form-control">
-        </div>
-      </section>
-      
-      <section class="file-section">
-        <h2>Select CSV File</h2>
-        <form id="uploadForm" enctype="multipart/form-data">
+      <div class="setup-container">
+        <!-- API Credentials Section -->
+        <section class="api-credentials-section">
+          <h2>1. Enter API Credentials</h2>
           <div class="form-group">
-            <label for="csvFile">CSV File:</label>
-            <div class="file-input-wrapper">
-              <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control">
-              <span id="fileNameDisplay">No file selected</span>
+            <label for="apiUserId">API User ID: <span class="required">*</span></label>
+            <input type="text" id="apiUserId" name="apiUserId" class="form-control" placeholder="Enter your API User ID">
+            <small class="form-hint">Your unique identifier for API access</small>
+          </div>
+          <div class="form-group">
+            <label for="apiKeyId">API Key: <span class="required">*</span></label>
+            <input type="password" id="apiKeyId" name="apiKeyId" class="form-control" placeholder="Enter your API Key">
+            <small class="form-hint">Your secret key for API authentication</small>
+          </div>
+        </section>
+        
+        <!-- File Upload Section -->
+        <section class="file-section">
+          <h2>2. Upload Profile Data</h2>
+          <form id="uploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+              <label for="csvFile">CSV File: <span class="required">*</span></label>
+              <div class="file-input-container">
+                <div class="file-input-wrapper">
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control">
+                  <button type="button" id="browseButton" class="browse-btn">Browse Files</button>
+                </div>
+                <div class="file-display">
+                  <span id="fileNameDisplay">No file selected</span>
+                  <a href="/sample_profiles.csv" download class="download-sample">Download Sample CSV</a>
+                </div>
+              </div>
+              <small class="form-hint">CSV with columns: profile_id, proxy (optional)</small>
             </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="globalProxy">Global Proxy (Optional):</label>
-            <input type="text" id="globalProxy" name="globalProxy" placeholder="Example: 123.456.789.012:8080 or user:pass@123.456.789.012:8080" class="form-control">
-          </div>
-        </form>
-      </section>
+            
+            <div class="form-group">
+              <label for="globalProxy">Global Proxy (Optional):</label>
+              <input type="text" id="globalProxy" name="globalProxy" class="form-control" 
+                placeholder="Example: 123.456.789.012:8080 or user:pass@123.456.789.012:8080">
+              <small class="form-hint">Override individual proxy settings from CSV with a global proxy</small>
+            </div>
+          </form>
+        </section>
+      </div>
       
       <div class="demo-mode-notice">
         <p>DEMO MODE: Any non-empty API credentials will be accepted</p>

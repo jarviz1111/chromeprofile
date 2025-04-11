@@ -24,10 +24,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let totalProfiles = 0;
   let currentProfileIndex = 0;
   
+  // Browse button functionality
+  const browseButton = document.getElementById('browseButton');
+  
   // Event listeners
   csvFileInput.addEventListener('change', handleFileChange);
   startProcessingBtn.addEventListener('click', startProcessing);
   nextProfileBtn.addEventListener('click', processNextProfile);
+  
+  // Trigger file input when browse button is clicked
+  if (browseButton) {
+    browseButton.addEventListener('click', function() {
+      csvFileInput.click();
+    });
+  }
   
   // Setup delete profile buttons
   deleteProfileButtons.forEach(button => {
