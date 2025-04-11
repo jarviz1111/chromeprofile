@@ -79,19 +79,24 @@ async function launchBrowser(profileId, proxy = null) {
   
   // Setup browser launch options
   const launchOptions = {
-    headless: false,
+    headless: 'new', // Use headless mode for Replit environment
     userDataDir,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
       '--disable-infobars',
-      '--window-size=1920,1080',
+      '--window-size=1366,768',
       `--user-agent=${userAgent}`
     ],
     ignoreDefaultArgs: ['--enable-automation'],
     defaultViewport: {
-      width: 1920,
-      height: 1080
+      width: 1366,
+      height: 768
     }
   };
   

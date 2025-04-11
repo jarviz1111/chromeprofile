@@ -66,6 +66,16 @@ app.get('/', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    message: 'Browser Session Manager is running',
+    nodejs: true,
+    time: new Date().toISOString()
+  });
+});
+
 // API verification
 app.post('/verify-api', async (req, res) => {
   const { apiUserId, apiKeyId } = req.body;

@@ -42,7 +42,9 @@ HTML_TEMPLATE = """
         <div class="info">
             <h2>Web Version (Recommended)</h2>
             <p>The newer web-based version of Browser Session Manager is now available.</p>
-            <a href="/?workflow=browser_session_manager_nodejs" class="btn">Access Web Version</a>
+            <a href="http://localhost:5000" class="btn" target="_blank">Access Web Version</a>
+            <p style="margin-top: 10px; font-size: 0.9em;">If the button above doesn't work, please access the web version directly at: 
+            <a href="http://localhost:5000" target="_blank">http://localhost:5000</a></p>
         </div>
         
         <div class="info">
