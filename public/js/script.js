@@ -19,6 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const currentProfileText = document.getElementById('currentProfileText');
   const deleteProfileButtons = document.querySelectorAll('.delete-profile');
   
+  // Database elements
+  const dbStatusBadge = document.getElementById('dbStatusBadge');
+  const dbStatus = document.getElementById('dbStatus');
+  const dbServerTime = document.getElementById('dbServerTime');
+  const dbType = document.getElementById('dbType');
+  const checkDbBtn = document.getElementById('checkDbBtn');
+  
   // State variables
   let isProcessing = false;
   let totalProfiles = 0;
@@ -31,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   csvFileInput.addEventListener('change', handleFileChange);
   startProcessingBtn.addEventListener('click', startProcessing);
   nextProfileBtn.addEventListener('click', processNextProfile);
+  if (checkDbBtn) checkDbBtn.addEventListener('click', checkDatabaseStatus);
   
   // Trigger file input when browse button is clicked
   if (browseButton) {
@@ -322,7 +330,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  /**
+   * Check database connection status
+   */
+  async function checkDatabaseStatus() {
+    if (!dbStatusBadge || !dbStatus || !dbServerTime) return;
+    
+    dbStatusBadge.textContent = 'Checking...';
+    dbStatusBadge.className = 'badge';
+    dbStatus.textContent = 'Checking connection...';
+    dbServerTime.textContent = '-';
+    
+    try {
+      logToConsole('Checking database connection...');
+      const response = await fetch('/db-status');
+      const data = await response.json();
+      
+      if (data.status === 'ok') {
+        dbStatusBadge.textContent = 'Connected';
+        dbStatusBadge.className = 'badge badge-success';
+        dbStatus.textContent = data.message;
+        dbServerTime.textContent = new Date(data.db_info.server_time).toLocaleString();
+        dbType.textContent = data.db_info.database_type;
+        
+        logToConsole('Database connection successful', 'success');
+      } else {
+        dbStatusBadge.textContent = 'Error';
+        dbStatusBadge.className = 'badge badge-error';
+        dbStatus.textContent = data.message;
+        dbServerTime.textContent = 'N/A';
+        
+        logToConsole(`Database connection failed: ${data.message}`, 'error');
+      }
+    } catch (error) {
+      dbStatusBadge.textContent = 'Error';
+      dbStatusBadge.className = 'badge badge-error';
+      dbStatus.textContent = 'Connection failed';
+      dbServerTime.textContent = 'N/A';
+      
+      logToConsole(`Database connection error: ${error.message}`, 'error');
+    }
+  }
+  
   // Initial console message
   logToConsole('🚀 Browser Session Manager started.');
   logToConsole('Please select a CSV file with profiles and enter your API credentials.');
+  
+  // Check database connection on page load
+  if (dbStatusBadge && dbStatus) {
+    checkDatabaseStatus();
+  }
 });

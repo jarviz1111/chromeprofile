@@ -11,7 +11,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const csvParser = require('csv-parser');
-const { initDb, saveSession, loadSession, getAllProfiles, deleteProfile } = require('./modules/session');
+// Use PostgreSQL version of the session module
+const { initDb, saveSession, loadSession, getAllProfiles, deleteProfile } = require('./modules/session_pg');
 const { verifyApi } = require('./modules/api');
 const { launchBrowser, killChrome } = require('./modules/driver');
 
@@ -76,6 +77,36 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Database status endpoint
+app.get('/db-status', async (req, res) => {
+  try {
+    const { query, pool } = require('./modules/database');
+    const result = await query('SELECT NOW() as server_time');
+    const dbInfo = {
+      server_time: result.rows[0].server_time,
+      connection_pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount
+      },
+      database_url: process.env.DATABASE_URL ? 'Connected (URL exists)' : 'Missing',
+      database_type: 'PostgreSQL'
+    };
+    
+    res.status(200).json({
+      status: 'ok',
+      message: 'Database connection successful',
+      db_info: dbInfo
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection failed',
+      error: error.message
+    });
+  }
+});
+
 // API verification
 app.post('/verify-api', async (req, res) => {
   const { apiUserId, apiKeyId } = req.body;
@@ -134,7 +165,8 @@ app.post('/process-next', async (req, res) => {
       const userAgent = await currentDriver.evaluate(() => navigator.userAgent);
       const profileId = profilesList[currentIndex].profileId;
       
-      if (saveSession(profileId, userAgent, cookies)) {
+      const saveResult = await saveSession(profileId, userAgent, cookies);
+      if (saveResult) {
         console.log(`Session saved for profile: ${profileId}`);
       } else {
         console.log(`Warning: Could not save session for ${profileId}`);

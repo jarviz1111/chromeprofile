@@ -302,6 +302,64 @@ footer {
   font-size: 0.9rem;
 }
 
+/* Database section */
+.database-section {
+  margin-top: 30px;
+}
+
+.database-info {
+  background-color: var(--darker-bg);
+  padding: 15px;
+  border-radius: 4px;
+}
+
+.database-status-badge {
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: center;
+}
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  display: inline-block;
+  background-color: #555;
+  color: white;
+}
+
+.badge-success {
+  background-color: var(--secondary-color);
+}
+
+.badge-error {
+  background-color: var(--danger-color);
+}
+
+.database-details {
+  margin-bottom: 15px;
+}
+
+.database-details p {
+  margin: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+#checkDbBtn {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#checkDbBtn:hover {
+  background-color: #0056b3;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .buttons-section {

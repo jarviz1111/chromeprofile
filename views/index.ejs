@@ -110,6 +110,23 @@
           <% } %>
         </div>
       </section>
+
+      <section class="database-section">
+        <h2>Database Information</h2>
+        <div class="database-info" id="databaseInfo">
+          <div class="database-status-badge">
+            <span class="badge" id="dbStatusBadge">Checking...</span>
+          </div>
+
+          <div class="database-details" id="dbDetails">
+            <p>Database Type: <span id="dbType">PostgreSQL</span></p>
+            <p>Status: <span id="dbStatus">Checking connection...</span></p>
+            <p>Server Time: <span id="dbServerTime">-</span></p>
+          </div>
+
+          <button id="checkDbBtn" class="btn-small">Check Connection</button>
+        </div>
+      </section>
     </main>
     
     <footer>
