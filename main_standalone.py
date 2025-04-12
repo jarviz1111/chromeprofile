@@ -48,39 +48,69 @@ class TextLogger:
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
+        
+        # First create table if it doesn't exist with basic columns
         c.execute('''CREATE TABLE IF NOT EXISTS sessions (
             profile TEXT PRIMARY KEY,
             user_agent TEXT,
             cookies TEXT
         )''')
+        
+        # Check existing columns
         c.execute("PRAGMA table_info(sessions)")
         columns = [col[1] for col in c.fetchall()]
-        if 'updated_at' not in columns:
-            c.execute("ALTER TABLE sessions ADD COLUMN updated_at TEXT")
+        
+        # Add columns for enhanced data storage if they don't exist
+        required_columns = [
+            ('updated_at', 'TEXT'),
+            ('email', 'TEXT'),
+            ('password', 'TEXT'),
+            ('login_domain', 'TEXT'),
+            ('hardware_profile', 'TEXT'),
+            ('fingerprint_settings', 'TEXT'),
+            ('timezone', 'TEXT'),
+            ('screen_resolution', 'TEXT'),
+            ('platform', 'TEXT'),
+            ('language', 'TEXT'),
+            ('login_status', 'TEXT'),
+            ('last_login_time', 'TEXT'),
+            ('login_count', 'INTEGER DEFAULT 0')
+        ]
+        
+        for col_name, col_type in required_columns:
+            if col_name not in columns:
+                try:
+                    c.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_type}")
+                    print(f"Added column: {col_name}")
+                except sqlite3.Error as e:
+                    print(f"Error adding column {col_name}: {e}")
+                    
         conn.commit()
+        print("✅ Database schema updated to store enhanced profile data")
 
-def save_session(profile, user_agent, cookies):
-    try:
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
-            c = conn.cursor()
-            now = datetime.utcnow().isoformat()
-            c.execute('''INSERT OR REPLACE INTO sessions 
-                         (profile, user_agent, cookies, updated_at)
-                         VALUES (?, ?, ?, ?)''',
-                      (profile, user_agent, json.dumps(cookies), now))
-            conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ DB Save Error: {e}")
-        return False
+def save_session(profile, user_agent, cookies, email=None, password=None, login_domain=None):
+    """Save browser session to the database (legacy method)"""
+    # Use the enhanced version for better data storage
+    return save_enhanced_session(profile, user_agent, cookies, email, password, login_domain)
 
 def load_session(profile):
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('SELECT user_agent, cookies FROM sessions WHERE profile = ?', (profile,))
-        result = c.fetchone()
-        if result:
-            return result[0], json.loads(result[1]) if result[1] else None
+    """Load browser session from the database (legacy method for backward compatibility)"""
+    # Try using the enhanced version first
+    session_data = load_enhanced_session(profile)
+    if session_data:
+        return session_data["user_agent"], session_data["cookies"]
+        
+    # Fall back to basic loading for backward compatibility
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute('SELECT user_agent, cookies FROM sessions WHERE profile = ?', (profile,))
+            result = c.fetchone()
+            if result:
+                return result[0], json.loads(result[1]) if result[1] else None
+            return None, None
+    except Exception as e:
+        print(f"❌ DB Load Error: {e}")
         return None, None
 
 def verify_api(api_user_id, api_key_id):
@@ -116,16 +146,191 @@ def kill_chrome():
         except:
             pass
 
+def save_enhanced_session(profile, user_agent, cookies, email=None, password=None, login_domain=None, 
+                      hardware_profile=None, fingerprint_settings=None, 
+                      timezone=None, screen_resolution=None, platform=None,
+                      language=None, login_status=None):
+    """Save browser session with enhanced data to the database."""
+    try:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            c = conn.cursor()
+            now = datetime.utcnow().isoformat()
+            
+            # First check if this profile already exists
+            c.execute('SELECT login_count FROM sessions WHERE profile = ?', (profile,))
+            result = c.fetchone()
+            login_count = 1  # Default for new profiles
+            
+            if result and result[0]:
+                # Increment login count if profile exists
+                try:
+                    login_count = int(result[0]) + 1
+                except:
+                    login_count = 1
+            
+            # Prepare hardware profile JSON if provided
+            if hardware_profile is None:
+                # Create default hardware profile
+                hardware_profile = json.dumps({
+                    "cpu_cores": random.choice([2, 4, 6, 8, 12, 16]),
+                    "memory": random.choice([4, 8, 16, 32, 64]),
+                    "gpu": random.choice([
+                        "Intel Iris Xe Graphics", "NVIDIA GeForce RTX 3060",
+                        "AMD Radeon RX 6600 XT", "Apple M1", "Intel UHD Graphics 620"
+                    ]),
+                    "device_id": ''.join(random.choices('0123456789abcdef', k=32)),
+                    "machine_id": ''.join(random.choices('0123456789ABCDEF', k=16))
+                })
+            elif isinstance(hardware_profile, dict):
+                hardware_profile = json.dumps(hardware_profile)
+                
+            # Prepare fingerprint settings JSON if provided
+            if fingerprint_settings is None:
+                fingerprint_settings = json.dumps({
+                    "canvas_noise": random.uniform(0.1, 2.0),
+                    "webgl_noise": random.uniform(0.1, 1.5),
+                    "audio_noise": random.uniform(0.2, 1.0),
+                    "timezone_offset": random.choice([-480, -420, -360, -300, -240, -180, 0, 60, 120, 180, 240, 300, 360, 480]),
+                    "webrtc_enabled": random.choice([True, False]),
+                    "do_not_track": random.choice([True, False]),
+                    "touch_enabled": random.choice([True, False])
+                })
+            elif isinstance(fingerprint_settings, dict):
+                fingerprint_settings = json.dumps(fingerprint_settings)
+                
+            # Use defaults for missing values
+            if timezone is None:
+                timezones = ["America/New_York", "America/Chicago", "America/Denver", 
+                            "America/Los_Angeles", "Europe/London", "Europe/Paris", 
+                            "Asia/Tokyo", "Australia/Sydney"]
+                timezone = random.choice(timezones)
+                
+            if screen_resolution is None:
+                resolutions = ["1920x1080", "2560x1440", "1366x768", "1440x900", 
+                              "3840x2160", "1536x864", "1280x720"]
+                screen_resolution = random.choice(resolutions)
+                
+            if platform is None:
+                platforms = ["Windows NT 10.0", "Windows NT 11.0", "Macintosh; Intel Mac OS X 10_15",
+                            "Macintosh; Intel Mac OS X 11_0", "X11; Linux x86_64"]
+                platform = random.choice(platforms)
+                
+            if language is None:
+                languages = ["en-US,en;q=0.9", "en-GB,en;q=0.8,fr;q=0.6", 
+                            "es-ES,es;q=0.9,en;q=0.8", "fr-FR,fr;q=0.9,en;q=0.8"]
+                language = random.choice(languages)
+                
+            if login_status is None:
+                login_status = "active"
+                
+            # Check if the login domain can be determined from current URL
+            if login_domain is None and login_status == "active":
+                if "gmail" in profile.lower() or "google" in profile.lower():
+                    login_domain = "google.com"
+                elif "yahoo" in profile.lower():
+                    login_domain = "yahoo.com"
+                elif "outlook" in profile.lower() or "hotmail" in profile.lower():
+                    login_domain = "outlook.com"
+                else:
+                    login_domain = "unknown"
+            
+            # Insert or update the profile with all fields
+            c.execute('''
+                INSERT OR REPLACE INTO sessions 
+                (profile, user_agent, cookies, email, password, login_domain, 
+                hardware_profile, fingerprint_settings, timezone, screen_resolution, 
+                platform, language, login_status, last_login_time, login_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                profile, user_agent, json.dumps(cookies), email, password, login_domain,
+                hardware_profile, fingerprint_settings, timezone, screen_resolution,
+                platform, language, login_status, now, login_count, now
+            ))
+            
+            conn.commit()
+            
+            print(f"✅ Enhanced session data saved for profile: {profile}")
+            if login_count > 1:
+                print(f"📊 This profile has been logged in {login_count} times")
+                
+        return True
+    except Exception as e:
+        print(f"❌ Enhanced DB Save Error: {e}")
+        return False
+
+def load_enhanced_session(profile):
+    """Load enhanced browser session data from the database."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute('''SELECT user_agent, cookies, email, password, login_domain, 
+                         hardware_profile, fingerprint_settings, timezone, screen_resolution, 
+                         platform, language
+                      FROM sessions WHERE profile = ?''', (profile,))
+            result = c.fetchone()
+            
+            if result:
+                user_agent = result[0]
+                cookies = json.loads(result[1]) if result[1] else None
+                email = result[2]
+                password = result[3]
+                login_domain = result[4]
+                hardware_profile = json.loads(result[5]) if result[5] else None
+                fingerprint_settings = json.loads(result[6]) if result[6] else None
+                timezone = result[7]
+                screen_resolution = result[8] 
+                platform = result[9]
+                language = result[10]
+                
+                return {
+                    "user_agent": user_agent,
+                    "cookies": cookies,
+                    "email": email,
+                    "password": password,
+                    "login_domain": login_domain,
+                    "hardware_profile": hardware_profile,
+                    "fingerprint_settings": fingerprint_settings,
+                    "timezone": timezone,
+                    "screen_resolution": screen_resolution,
+                    "platform": platform,
+                    "language": language
+                }
+            return None
+    except Exception as e:
+        print(f"❌ Enhanced DB Load Error: {e}")
+        return None
+
 def launch_browser_return_driver(profile_id, proxy=None):
+    """
+    Launch a browser session with anti-detection features for more reliable email account access.
+    Especially optimized for Gmail, Yahoo, and other email providers.
+    """
     print(f"🟢 Launching browser for profile: {profile_id}")
+    
+    # Create profile directory if it doesn't exist
     user_data_dir = os.path.join("browser_profiles", profile_id)
     os.makedirs(user_data_dir, exist_ok=True)
     
-    stored_user_agent, stored_cookies = load_session(profile_id)
-
-    if stored_user_agent:
-        user_agent = stored_user_agent
+    # Load session data from database
+    session_data = load_enhanced_session(profile_id)
+    login_domain = None
+    
+    if session_data:
+        user_agent = session_data["user_agent"]
+        stored_cookies = session_data["cookies"]
+        email = session_data["email"]
+        login_domain = session_data["login_domain"]
+        
+        # Log some info without revealing sensitive data
+        if email:
+            email_preview = f"{email[:3]}...@{email.split('@')[1]}" if '@' in email else f"{email[:3]}..."
+            print(f"🔑 Using saved credentials for: {email_preview}")
+        
+        if login_domain:
+            print(f"🌐 Account domain: {login_domain}")
     else:
+        stored_cookies = None
+        # Generate a new user agent if none exists
         try:
             ua = UserAgent()
             for _ in range(10):
@@ -139,6 +344,7 @@ def launch_browser_return_driver(profile_id, proxy=None):
             print(f"⚠️ Error loading fake_useragent: {e}")
             user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
+    # Configure Chrome options with enhanced anti-detection
     options = uc.ChromeOptions()
     options.add_argument(f"--user-agent={user_agent}")
     options.add_argument("--disable-blink-features=AutomationControlled")
@@ -148,84 +354,286 @@ def launch_browser_return_driver(profile_id, proxy=None):
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument(f"--user-data-dir={user_data_dir}")
-
+    
+    # More anti-detection arguments
+    options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    options.add_argument("--disable-site-isolation-trials")
+    options.add_argument("--disable-web-security")
+    
+    # Add proxy if specified
     if proxy:
         options.add_argument(f"--proxy-server=http://{proxy}")
         print(f"🌐 Using Proxy: {proxy}")
     else:
         print("🚫 No proxy set.")
 
+    # Initialize Chrome driver with enhanced arguments
     driver = uc.Chrome(options=options)
-
+    
+    # Set timezone and language from session data or defaults
+    timezone = session_data["timezone"] if session_data and session_data["timezone"] else "America/New_York"
+    language = session_data["language"] if session_data and session_data["language"] else "en-US,en;q=0.9"
+    platform = session_data["platform"] if session_data and session_data["platform"] else "Win32"
+    
+    # Override user agent with more detailed parameters
     driver.execute_cdp_cmd('Network.setUserAgentOverride', {
         "userAgent": user_agent,
-        "acceptLanguage": "en-US,en;q=0.9",
-        "platform": "Win32"
+        "acceptLanguage": language,
+        "platform": platform
     })
+    
+    # Apply many anti-detection measures to make automation less detectable
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
-    vendor_renderer_pairs = [
-        ('Intel Inc.', 'Intel Iris Xe Graphics'),
-        ('Intel Inc.', 'Intel UHD Graphics 630'),
-        ('Intel Inc.', 'Intel HD Graphics 520'),
-        ('Intel Inc.', 'Intel Iris Plus Graphics 655'),
-        ('Intel Inc.', 'Intel UHD Graphics 620'),
-
-        ('NVIDIA Corporation', 'NVIDIA GeForce GTX 1050'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce GTX 1660 Ti'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce RTX 2060'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce RTX 3060'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce RTX 3080'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce MX250'),
-        ('NVIDIA Corporation', 'NVIDIA GeForce GT 1030'),
-        ('NVIDIA Corporation', 'NVIDIA Quadro P2000'),
-        ('NVIDIA Corporation', 'NVIDIA RTX A2000'),
-
-        ('AMD', 'AMD Radeon RX 580'),
-        ('AMD', 'AMD Radeon RX 5700 XT'),
-        ('AMD', 'AMD Radeon RX 6600 XT'),
-        ('AMD', 'AMD Radeon Pro 5500M'),
-        ('AMD', 'AMD Radeon Vega 8'),
-        ('AMD', 'AMD Radeon R9 M370X'),
-
-        ('Apple Inc.', 'Apple M1'),
-        ('Apple Inc.', 'Apple M2'),
-        ('Apple Inc.', 'Apple M1 Pro'),
-        ('Apple Inc.', 'Apple M1 Max'),
-        ('Apple Inc.', 'Apple M2 Max'),
-    ]
-
-    vendor, renderer = random.choice(vendor_renderer_pairs)
-
+    
+    # Use values from database if available, otherwise generate new ones
+    if session_data and session_data["hardware_profile"]:
+        vendor = session_data["hardware_profile"].get("vendor", "NVIDIA Corporation")
+        renderer = session_data["hardware_profile"].get("gpu", "NVIDIA GeForce RTX 3060")
+    else:
+        # Predefined pairs of vendor and renderer for realistic WebGL fingerprints
+        vendor_renderer_pairs = [
+            ('Intel Inc.', 'Intel Iris Xe Graphics'),
+            ('Intel Inc.', 'Intel UHD Graphics 630'),
+            ('Intel Inc.', 'Intel HD Graphics 520'),
+            ('Intel Inc.', 'Intel Iris Plus Graphics 655'),
+            ('Intel Inc.', 'Intel UHD Graphics 620'),
+    
+            ('NVIDIA Corporation', 'NVIDIA GeForce GTX 1050'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce GTX 1660 Ti'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce RTX 2060'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce RTX 3060'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce RTX 3080'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce MX250'),
+            ('NVIDIA Corporation', 'NVIDIA GeForce GT 1030'),
+            ('NVIDIA Corporation', 'NVIDIA Quadro P2000'),
+            ('NVIDIA Corporation', 'NVIDIA RTX A2000'),
+    
+            ('AMD', 'AMD Radeon RX 580'),
+            ('AMD', 'AMD Radeon RX 5700 XT'),
+            ('AMD', 'AMD Radeon RX 6600 XT'),
+            ('AMD', 'AMD Radeon Pro 5500M'),
+            ('AMD', 'AMD Radeon Vega 8'),
+            ('AMD', 'AMD Radeon R9 M370X'),
+    
+            ('Apple Inc.', 'Apple M1'),
+            ('Apple Inc.', 'Apple M2'),
+            ('Apple Inc.', 'Apple M1 Pro'),
+            ('Apple Inc.', 'Apple M1 Max'),
+            ('Apple Inc.', 'Apple M2 Max'),
+        ]
+        vendor, renderer = random.choice(vendor_renderer_pairs)
+    
+    # Advanced fingerprint randomization with consistent values per profile
     driver.execute_script(f"""
-    Object.defineProperty(navigator, 'plugins', {{ get: () => [1,2,3] }});
-    Object.defineProperty(navigator, 'languages', {{ get: () => ['en-US', 'en'] }});
+    // Hide automation flags
+    Object.defineProperty(navigator, 'plugins', {{ get: () => [
+        {{'name': 'Chrome PDF Plugin', 'filename': 'internal-pdf-viewer', 'description': 'Portable Document Format',
+         'length': 1, '0': {{'type': 'application/x-google-chrome-pdf', 'suffixes': 'pdf', 'description': 'Portable Document Format'}}}},
+        {{'name': 'Chrome PDF Viewer', 'filename': 'mhjfbmdgcfjbbpaeojofohoefgiehjai', 'description': '',
+         'length': 1, '0': {{'type': 'application/pdf', 'suffixes': 'pdf', 'description': ''}}}},
+        {{'name': 'Native Client', 'filename': 'internal-nacl-plugin', 'description': '',
+         'length': 2, 
+         '0': {{'type': 'application/x-nacl', 'suffixes': '', 'description': 'Native Client Executable'}},
+         '1': {{'type': 'application/x-pnacl', 'suffixes': '', 'description': 'Portable Native Client Executable'}}
+        }}
+    ] }});
+    
+    // Set consistent languages
+    Object.defineProperty(navigator, 'languages', {{ get: () => ['{language.split(",")[0]}', 'en'] }});
+    
+    // Override WebGL fingerprinting
     const getParameter = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function(param) {{
+        // WebGL vendor and renderer strings
         if (param === 37445) return '{vendor}';
         if (param === 37446) return '{renderer}';
+        
+        // Add noise to ANGLE values to prevent fingerprinting
+        if (param === 37808) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX {random.randint(900, 3080)} Direct3D11 vs_5_0)';
+        if (param === 33902) return 'WebKit WebGL';
+        if (param === 33901) return 'WebKit';
+        
         return getParameter.call(this, param);
     }};
+    
+    // Override AudioContext fingerprinting
+    const audioCtx = window.AudioContext || window.webkitAudioContext;
+    if (audioCtx) {{
+        const createOscillator = audioCtx.prototype.createOscillator;
+        audioCtx.prototype.createOscillator = function() {{
+            const oscillator = createOscillator.apply(this, arguments);
+            const originalStart = oscillator.start;
+            oscillator.start = function() {{
+                this.frequency.value = this.frequency.value * (1 + Math.random() * 0.01);
+                return originalStart.apply(this, arguments);
+            }};
+            return oscillator;
+        }};
+    }}
+    
+    // Override canvas fingerprinting
+    CanvasRenderingContext2D.prototype.originalFillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function() {{
+        let args = arguments;
+        if (arguments[0] && typeof arguments[0] === 'string') {{
+            // Only add noise to text that might be used for fingerprinting
+            if (arguments[0].includes('Cwm fjordbank glyphs vext quiz') || 
+                arguments[0].length > 20) {{
+                const oldFont = this.font;
+                this.font = this.font.replace(/([0-9]+)px/, function(match, p1) {{
+                    const size = parseInt(p1);
+                    return `${{size + (Math.random() < 0.5 ? 0 : 0.02)}}px`;
+                }});
+                const result = this.originalFillText.apply(this, args);
+                this.font = oldFont;
+                return result;
+            }}
+        }}
+        return this.originalFillText.apply(this, args);
+    }};
+    
+    // Randomize client rects (used in fingerprinting)
+    const oldGetClientRects = Element.prototype.getClientRects;
+    Element.prototype.getClientRects = function() {{
+        const rects = oldGetClientRects.apply(this, arguments);
+        if (rects && rects.length > 0 && window.top === window.self) {{
+            for (let i = 0; i < rects.length; i++) {{
+                rects[i].x += (Math.random() < 0.5 ? 0 : 0.001);
+                rects[i].y += (Math.random() < 0.5 ? 0 : 0.001);
+                rects[i].width += (Math.random() < 0.5 ? 0 : 0.001);
+                rects[i].height += (Math.random() < 0.5 ? 0 : 0.001);
+            }}
+        }}
+        return rects;
+    }};
     """)
-
+    
+    # Email-specific login handling based on domain
     if stored_cookies:
-        print("🟡 Loading cookies...")
-        driver.get("https://accounts.google.com/")
-        for cookie in stored_cookies:
-            if 'sameSite' in cookie:
-                del cookie['sameSite']
-            try:
-                driver.add_cookie(cookie)
-            except:
-                pass
-        driver.get("https://mail.google.com/")
+        print("🟡 Loading cookies for saved session...")
+        
+        # Determine which email service to load
+        if login_domain == "google.com" or login_domain is None:
+            # Handle Gmail/Google login
+            driver.get("https://accounts.google.com/")
+            for cookie in stored_cookies:
+                if 'sameSite' in cookie:
+                    del cookie['sameSite']
+                try:
+                    driver.add_cookie(cookie)
+                except Exception as e:
+                    print(f"⚠️ Cookie error: {e}")
+            
+            # Navigate to Gmail
+            driver.get("https://mail.google.com/")
+            print("📧 Navigating to Gmail inbox")
+        
+        elif login_domain == "yahoo.com":
+            # Handle Yahoo login
+            driver.get("https://login.yahoo.com/")
+            for cookie in stored_cookies:
+                if 'sameSite' in cookie:
+                    del cookie['sameSite']
+                try:
+                    driver.add_cookie(cookie)
+                except:
+                    pass
+            
+            # Navigate to Yahoo Mail
+            driver.get("https://mail.yahoo.com/")
+            print("📧 Navigating to Yahoo Mail inbox")
+            
+        else:
+            # Generic email handling
+            driver.get(LOGIN_URL)
+            for cookie in stored_cookies:
+                if 'sameSite' in cookie:
+                    del cookie['sameSite']
+                try:
+                    driver.add_cookie(cookie)
+                except:
+                    pass
     else:
+        # No cookies found, start a new session
         print("🟢 No cookies found. Creating new session...")
-        driver.get(LOGIN_URL)
-        print("⚠️  Please login manually...")
-        time.sleep(30)
+        
+        # Detect if this is an email profile based on name
+        if "gmail" in profile_id.lower() or "google" in profile_id.lower():
+            driver.get("https://accounts.google.com/signin")
+            print("📧 Navigating to Gmail login page")
+            login_domain = "google.com"
+        elif "yahoo" in profile_id.lower():
+            driver.get("https://login.yahoo.com/")
+            print("📧 Navigating to Yahoo login page")
+            login_domain = "yahoo.com"
+        elif "outlook" in profile_id.lower() or "hotmail" in profile_id.lower():
+            driver.get("https://login.live.com/")
+            print("📧 Navigating to Outlook login page")
+            login_domain = "outlook.com"
+        else:
+            driver.get(LOGIN_URL)
+            print("🔄 Navigating to default login page")
+        
+        print("⚠️ Please login manually...")
+        
+        # Wait for manual login, then save the session
+        print("⏳ Waiting for login (60 seconds)...")
+        time.sleep(60)
+        
+        # Get current URL to detect email service if not already known
+        if not login_domain:
+            current_url = driver.current_url.lower()
+            if "google" in current_url or "gmail" in current_url:
+                login_domain = "google.com"
+            elif "yahoo" in current_url:
+                login_domain = "yahoo.com"
+            elif "outlook" in current_url or "hotmail" in current_url or "live.com" in current_url:
+                login_domain = "outlook.com"
+            else:
+                login_domain = "unknown"
+        
+        # Try to detect email address from page after login
+        email = None
+        try:
+            if login_domain == "google.com":
+                # Check for Gmail profile info
+                driver.get("https://myaccount.google.com/")
+                time.sleep(3)
+                email_element = driver.find_elements_by_css_selector("div[data-email]")
+                if email_element:
+                    email = email_element[0].get_attribute("data-email")
+            
+            # For other providers, we'll rely on manual entry
+        except:
+            print("⚠️ Could not automatically detect email address")
+        
+        # Get cookies and save enhanced session
         cookies = driver.get_cookies()
-        save_session(profile_id, user_agent, cookies)
+        
+        # Setup hardware profile for consistency
+        hardware_profile = {
+            "vendor": vendor,
+            "gpu": renderer,
+            "cpu_cores": random.choice([2, 4, 6, 8, 12, 16]),
+            "memory": random.choice([4, 8, 16, 32, 64]),
+            "device_id": ''.join(random.choices('0123456789abcdef', k=32)),
+        }
+        
+        # Get screen resolution
+        screen_resolution = driver.execute_script("return window.screen.width + 'x' + window.screen.height")
+        
+        # Save the enhanced session
+        save_enhanced_session(
+            profile_id, 
+            user_agent, 
+            cookies, 
+            email=email,
+            login_domain=login_domain,
+            hardware_profile=hardware_profile,
+            screen_resolution=screen_resolution,
+            platform=platform,
+            language=language
+        )
 
     return driver
 
@@ -287,11 +695,15 @@ def rename_profile(old_profile_name, new_profile_name):
         return False
 
 def get_all_profiles():
-    """Get all profiles from the database."""
+    """Get all profiles from the database with enhanced information."""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            c.execute('SELECT profile, updated_at FROM sessions ORDER BY updated_at DESC')
+            c.execute('''
+                SELECT profile, updated_at, email, login_domain, login_count, last_login_time 
+                FROM sessions 
+                ORDER BY updated_at DESC
+            ''')
             return c.fetchall()
     except Exception as e:
         print(f"❌ DB Load Error: {e}")
