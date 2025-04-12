@@ -150,13 +150,77 @@ def verify_api(api_user_id, api_key_id):
         print(f"❌ API verification failed: {e}")
         return False
 
-def kill_chrome():
-    for proc in psutil.process_iter():
+def kill_chrome(profile_id=None):
+    """
+    Kill Chrome processes, with the option to target a specific profile.
+    
+    Args:
+        profile_id (str, optional): If provided, only kill Chrome processes 
+                                   associated with this profile.
+    """
+    global current_driver
+    
+    # If we have a current_driver, attempt to close it properly first
+    if current_driver:
         try:
-            if proc.name().lower() in ["chrome.exe", "chromedriver.exe", "chrome", "chromedriver"]:
+            current_driver.quit()
+            print("✅ Browser closed gracefully")
+        except Exception as e:
+            print(f"⚠️ Error closing browser gracefully: {e}")
+        current_driver = None
+    
+    # Get the profile directory path if a profile_id was provided
+    profile_path = None
+    if profile_id:
+        profile_path = os.path.abspath(os.path.join("browser_profiles", profile_id))
+    
+    # Count killed processes
+    killed_count = 0
+    chromedriver_killed = 0
+    
+    # Find and kill chrome and chromedriver processes
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            proc_name = proc.info['name'].lower() if proc.info['name'] else ""
+            cmdline = proc.info['cmdline'] if proc.info['cmdline'] else []
+            
+            # Check if this is a Chrome or ChromeDriver process
+            is_chrome = any(chrome_name in proc_name for chrome_name in ["chrome", "chrome.exe"])
+            is_chromedriver = any(driver_name in proc_name for driver_name in ["chromedriver", "chromedriver.exe", "undetected_chromedriver"])
+            
+            # If profile_id was specified, check if this process is associated with that profile
+            if profile_id and is_chrome:
+                # Check command line for user-data-dir argument containing the profile path
+                profile_match = False
+                for cmd in cmdline:
+                    if "--user-data-dir=" in cmd and profile_path in cmd:
+                        profile_match = True
+                        break
+                
+                # Only kill if this process matches our profile
+                if profile_match:
+                    proc.kill()
+                    killed_count += 1
+                    print(f"🗑️ Killed Chrome process for profile: {profile_id}")
+            
+            # If no profile specified or this is a chromedriver, kill it
+            elif (not profile_id and is_chrome) or is_chromedriver:
                 proc.kill()
-        except:
+                if is_chromedriver:
+                    chromedriver_killed += 1
+                else:
+                    killed_count += 1
+        
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
+        except Exception as e:
+            print(f"⚠️ Error during process cleanup: {e}")
+    
+    if killed_count > 0 or chromedriver_killed > 0:
+        print(f"🧹 Cleaned up {killed_count} Chrome and {chromedriver_killed} ChromeDriver processes")
+    
+    # Add a small delay to ensure processes are fully terminated
+    time.sleep(0.5)
 
 def save_enhanced_session(profile, user_agent, cookies, email=None, password=None, login_domain=None, 
                       hardware_profile=None, fingerprint_settings=None, 
@@ -995,11 +1059,37 @@ def _close_browser_thread():
                 cookies = current_driver.get_cookies()
                 user_agent = current_driver.execute_script("return navigator.userAgent")
                 
-                # Save to database
-                if save_session(profile_id, user_agent, cookies):
-                    print(f"✅ Session saved for profile: {profile_id}")
-                else:
-                    print(f"⚠️ Warning: Could not save session for {profile_id}")
+                # Try to get additional browser information for enhanced profile saving
+                try:
+                    screen_resolution = current_driver.execute_script("return window.screen.width + 'x' + window.screen.height")
+                    platform = current_driver.execute_script("return navigator.platform")
+                    language = current_driver.execute_script("return navigator.language")
+                    
+                    # Try enhanced session saving with more details
+                    if save_enhanced_session(
+                        profile_id, 
+                        user_agent, 
+                        cookies,
+                        screen_resolution=screen_resolution,
+                        platform=platform,
+                        language=language
+                    ):
+                        print(f"✅ Enhanced session saved for profile: {profile_id}")
+                    else:
+                        # Fall back to basic session saving
+                        if save_session(profile_id, user_agent, cookies):
+                            print(f"✅ Basic session saved for profile: {profile_id}")
+                        else:
+                            print(f"⚠️ Warning: Could not save session for {profile_id}")
+                
+                except Exception as enhanced_save_error:
+                    print(f"⚠️ Enhanced session save failed, using basic save: {enhanced_save_error}")
+                    # Fall back to basic session saving
+                    if save_session(profile_id, user_agent, cookies):
+                        print(f"✅ Basic session saved for profile: {profile_id}")
+                    else:
+                        print(f"⚠️ Warning: Could not save session for {profile_id}")
+                        
             except Exception as save_error:
                 print(f"⚠️ Session save error: {save_error}")
                 
@@ -1007,17 +1097,25 @@ def _close_browser_thread():
             print("🔚 Closing browser...")
             try:
                 current_driver.quit()
+                print("✅ Browser closed gracefully")
             except Exception as quit_error:
                 print(f"⚠️ Browser quit error: {quit_error}")
                 
         except Exception as e:
             print(f"⚠️ Browser close warning: {e}")
         finally:
-            # Ensure Chrome processes are killed
+            # Ensure Chrome processes associated with this profile are killed
             try:
-                kill_chrome()
+                # Target only this profile's Chrome processes to avoid killing other sessions
+                profile_id, _ = profiles_list[current_index] 
+                kill_chrome(profile_id)
             except Exception as kill_error:
                 print(f"⚠️ Chrome kill error: {kill_error}")
+                # If profile-specific kill fails, try a general cleanup as a fallback
+                try:
+                    kill_chrome()
+                except:
+                    pass
     
     # Schedule UI updates from the main thread
     root.after(100, _finalize_browser_close)
@@ -1194,14 +1292,54 @@ def start_gui():
     
     def _cleanup_browser_thread():
         """Clean up browser in background thread to prevent UI from freezing."""
-        global current_driver
+        global current_driver, profiles_list, current_index
         
         try:
-            # Kill any remaining chrome processes
-            kill_chrome()
+            # First try to save session data if we can
+            if current_driver and current_index < len(profiles_list):
+                try:
+                    profile_id, _ = profiles_list[current_index]
+                    print(f"💾 Attempting to save session for {profile_id} before cleanup...")
+                    
+                    try:
+                        # Try to get cookies and user agent if browser is still accessible
+                        cookies = current_driver.get_cookies()
+                        user_agent = current_driver.execute_script("return navigator.userAgent")
+                        
+                        # Save to database if we got valid data
+                        if cookies and user_agent:
+                            save_session(profile_id, user_agent, cookies)
+                    except Exception as save_error:
+                        print(f"⚠️ Could not save session during cleanup: {save_error}")
+                except Exception as profile_error:
+                    print(f"⚠️ Could not determine current profile during cleanup: {profile_error}")
+                
+            # Kill Chrome processes associated with current profile if possible
+            try:
+                if current_index < len(profiles_list):
+                    profile_id, _ = profiles_list[current_index]
+                    print(f"🧹 Cleaning up Chrome processes for profile: {profile_id}")
+                    kill_chrome(profile_id)
+                else:
+                    # Fallback to general cleanup if we can't determine the profile
+                    print("🧹 Cleaning up all Chrome processes")
+                    kill_chrome()
+            except Exception as kill_error:
+                print(f"⚠️ Error during targeted Chrome cleanup: {kill_error}")
+                # Fallback to general cleanup
+                try:
+                    kill_chrome()
+                except:
+                    pass
+                    
             print("✅ Chrome processes cleaned up after manual browser closure.")
         except Exception as e:
             print(f"⚠️ Error during browser cleanup: {e}")
+            # Final fallback - try one more time with standard kill_chrome
+            try:
+                kill_chrome()
+            except:
+                pass
         finally:
             # Schedule UI updates from the main thread
             root.after(100, _finalize_browser_cleanup)
@@ -1265,14 +1403,50 @@ def start_gui():
         threading.Thread(target=_process_next_profile_thread, daemon=True).start()
 
     def on_closing():
-        global current_driver
+        """Handle the application closing event."""
+        global current_driver, profiles_list, current_index
+        
+        print("🛑 Closing Browser Session Manager...")
+        
+        # Try to save current session and close browser gracefully if one is open
         if current_driver:
             try:
+                print("💾 Saving session before exit...")
+                try:
+                    if current_index < len(profiles_list):
+                        # Try to save the current profile session
+                        profile_id, _ = profiles_list[current_index]
+                        cookies = current_driver.get_cookies()
+                        user_agent = current_driver.execute_script("return navigator.userAgent")
+                        
+                        if save_session(profile_id, user_agent, cookies):
+                            print(f"✅ Final session saved for profile: {profile_id}")
+                except Exception as save_error:
+                    print(f"⚠️ Could not save final session: {save_error}")
+                    
+                # Try to close the browser gracefully    
                 current_driver.quit()
+                print("✅ Browser closed gracefully")
+            except Exception as quit_error:
+                print(f"⚠️ Error during browser shutdown: {quit_error}")
+        
+        print("🧹 Cleaning up Chrome processes...")
+        
+        # Try profile-specific cleanup first if possible
+        if current_index < len(profiles_list):
+            try:
+                profile_id, _ = profiles_list[current_index]
+                kill_chrome(profile_id)
             except:
-                pass
-        kill_chrome()
+                # Fall back to general cleanup on error
+                kill_chrome()
+        else:
+            # If no specific profile is active, do general cleanup
+            kill_chrome()
+            
+        # Restore standard output and close window
         sys.stdout = sys.__stdout__
+        print("✅ Browser Session Manager closed successfully.")
         root.destroy()
 
     # Set appearance mode and default color theme

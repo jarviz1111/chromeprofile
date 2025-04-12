@@ -3,12 +3,19 @@ Test Enhanced Browser Session Manager
 ------------------------------------
 This script demonstrates how to use the enhanced browser session features
 from the command line, without requiring the GUI interface.
+
+Features:
+- Profile management via command line
+- Smart process handling to prevent multiple Chrome instances
+- Enhanced session saving with detailed profile information
+- Headless mode support for automation
 """
 
 import os
 import sys
 import time
 import json
+import psutil
 import argparse
 from datetime import datetime
 
@@ -31,8 +38,83 @@ try:
     from fake_useragent import UserAgent
 except ImportError:
     print("❌ Required libraries not found.")
-    print("Please run: pip install undetected-chromedriver selenium fake-useragent")
+    print("Please run: pip install undetected-chromedriver selenium fake-useragent psutil")
     sys.exit(1)
+
+# Browser driver reference 
+current_driver = None
+
+def kill_chrome(profile_id=None):
+    """
+    Kill Chrome processes, with the option to target a specific profile.
+    
+    Args:
+        profile_id (str, optional): If provided, only kill Chrome processes 
+                                   associated with this profile.
+    """
+    global current_driver
+    
+    # If we have a current_driver, attempt to close it properly first
+    if current_driver:
+        try:
+            current_driver.quit()
+            print("✅ Browser closed gracefully")
+        except Exception as e:
+            print(f"⚠️ Error closing browser gracefully: {e}")
+        current_driver = None
+    
+    # Get the profile directory path if a profile_id was provided
+    profile_path = None
+    if profile_id:
+        profile_path = os.path.abspath(os.path.join("browser_profiles", profile_id))
+    
+    # Count killed processes
+    killed_count = 0
+    chromedriver_killed = 0
+    
+    # Find and kill chrome and chromedriver processes
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            proc_name = proc.info['name'].lower() if proc.info['name'] else ""
+            cmdline = proc.info['cmdline'] if proc.info['cmdline'] else []
+            
+            # Check if this is a Chrome or ChromeDriver process
+            is_chrome = any(chrome_name in proc_name for chrome_name in ["chrome", "chrome.exe"])
+            is_chromedriver = any(driver_name in proc_name for driver_name in ["chromedriver", "chromedriver.exe", "undetected_chromedriver"])
+            
+            # If profile_id was specified, check if this process is associated with that profile
+            if profile_id and is_chrome:
+                # Check command line for user-data-dir argument containing the profile path
+                profile_match = False
+                for cmd in cmdline:
+                    if "--user-data-dir=" in cmd and profile_path in cmd:
+                        profile_match = True
+                        break
+                
+                # Only kill if this process matches our profile
+                if profile_match:
+                    proc.kill()
+                    killed_count += 1
+                    print(f"🗑️ Killed Chrome process for profile: {profile_id}")
+            
+            # If no profile specified or this is a chromedriver, kill it
+            elif (not profile_id and is_chrome) or is_chromedriver:
+                proc.kill()
+                if is_chromedriver:
+                    chromedriver_killed += 1
+                else:
+                    killed_count += 1
+        
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+        except Exception as e:
+            print(f"⚠️ Error during process cleanup: {e}")
+    
+    if killed_count > 0 or chromedriver_killed > 0:
+        print(f"🧹 Cleaned up {killed_count} Chrome and {chromedriver_killed} ChromeDriver processes")
+    
+    # Add a small delay to ensure processes are fully terminated
+    time.sleep(0.5)
 
 def list_profiles():
     """List all saved profiles with enhanced information."""
@@ -78,10 +160,16 @@ def list_profiles():
 
 def launch_browser(profile_id, proxy=None, headless=False):
     """Launch a browser with the specified profile."""
+    global current_driver
+    
     # Initialize the database if needed
     init_db()
     
     print(f"🟢 Launching browser for profile: {profile_id}")
+    
+    # Kill any existing Chrome processes for this profile to prevent conflicts
+    print(f"🧹 Cleaning up any existing browser instances for {profile_id}...")
+    kill_chrome(profile_id)
     
     # Create profile directory if it doesn't exist
     user_data_dir = os.path.join("browser_profiles", profile_id)
@@ -154,6 +242,9 @@ def launch_browser(profile_id, proxy=None, headless=False):
     # Initialize Chrome driver with enhanced arguments
     try:
         driver = uc.Chrome(options=options)
+        # Store the driver reference globally for proper cleanup later
+        global current_driver
+        current_driver = driver
         
         # Apply basic anti-fingerprinting measures
         driver.execute_script("""
@@ -289,12 +380,19 @@ def launch_browser(profile_id, proxy=None, headless=False):
         print(f"❌ Error launching browser: {e}")
         return False
 
+def clean_command():
+    """Command to clean up any remaining Chrome processes."""
+    print("🧹 Cleaning up Chrome processes...")
+    kill_chrome()
+    print("✅ Cleanup complete")
+    return True
+
 def main():
     """Main function to parse command line arguments and execute commands."""
     parser = argparse.ArgumentParser(description="Enhanced Browser Session Manager CLI")
     
     # Add command argument
-    parser.add_argument('command', choices=['list', 'launch', 'delete', 'rename'],
+    parser.add_argument('command', choices=['list', 'launch', 'delete', 'rename', 'clean'],
                         help='Command to execute')
     
     # Add optional profile argument
@@ -353,11 +451,34 @@ def main():
             print(f"✅ Profile renamed from '{args.profile}' to '{args.new_name}'.")
         else:
             print(f"❌ Failed to rename profile.")
+            
+    elif args.command == 'clean':
+        # Kill all Chrome processes
+        clean_command()
+        
+        # If profile specified, only clean that profile
+        if args.profile:
+            print(f"🧹 Cleaning up Chrome processes for profile: {args.profile}")
+            kill_chrome(args.profile)
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\n⚠️ Operation interrupted by user.")
+        # Ensure browser is closed if user interrupts the program
+        try:
+            if current_driver:
+                print("🔚 Closing browser due to interruption...")
+                current_driver.quit()
+        except:
+            pass
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
+        # Attempt to clean up even if an error occurs
+        try:
+            if current_driver:
+                print("🔚 Closing browser due to error...")
+                current_driver.quit()
+        except:
+            pass

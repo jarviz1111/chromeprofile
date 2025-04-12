@@ -13,6 +13,7 @@ A comprehensive application for managing browser sessions, profiles, and automat
 - **Multi-Platform Support**: Works on Windows, Linux, and macOS
 - **Command-Line Interface**: Supports both GUI and command-line operation
 - **Enhanced Database**: Store and manage detailed profile information including email accounts and login history
+- **Smart Process Management**: Improved Chrome process handling to prevent multiple browser instances for the same profile
 
 ## Installation
 
@@ -131,6 +132,16 @@ The application uses an SQLite database to store profile information including:
 - Hardware profile fingerprints
 - Screen resolution, platform, and language settings
 - Login history and session counts
+
+## Smart Process Management
+
+The application includes advanced Chrome process management to prevent issues with multiple browser instances:
+
+- **Profile-Specific Process Tracking**: Chrome processes are tracked by profile ID
+- **Targeted Process Termination**: Only terminates processes associated with a specific profile when needed
+- **Graceful Browser Closure**: Prioritizes proper driver.quit() before forced termination
+- **Enhanced Session Recovery**: Attempts to save session data even when browser is closed manually
+- **Cleanup Failsafes**: Multiple fallback mechanisms to ensure no orphaned processes remain
 
 ## Security Notes
 
