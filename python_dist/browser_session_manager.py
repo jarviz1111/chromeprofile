@@ -187,15 +187,55 @@ class BrowserManager:
             print(f"⚠️ Error loading fake_useragent: {e}")
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             
-    def kill_chrome_processes(self):
-        """Kill all running Chrome and ChromeDriver processes."""
+    def kill_chrome_processes(self, current_driver=None):
+        """Kill only the current Chrome session, not all Chrome instances on the PC.
+        
+        Args:
+            current_driver: The current WebDriver instance, if available
+        """
+        print("🔄 Cleaning up current Chrome session...")
+        
         try:
-            for proc in psutil.process_iter():
+            # First try to gracefully close the driver if provided
+            if current_driver:
                 try:
-                    if proc.name().lower() in ["chrome.exe", "chromedriver.exe", "chrome", "chromedriver"]:
-                        proc.kill()
+                    print("💾 Attempting to save session before closing...")
+                    current_driver.quit()
+                    print("✅ Browser closed gracefully.")
+                    return
+                except Exception as driver_error:
+                    print(f"⚠️ Error while closing browser gracefully: {driver_error}")
+                    # Fall back to process killing
+            
+            # Only kill chrome processes created by our script
+            killed_count = 0
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    proc_name = proc.info['name'].lower() if proc.info['name'] else ""
+                    
+                    # Check if it's a chrome or chromedriver process
+                    if any(browser_proc in proc_name for browser_proc in ["chrome.exe", "chromedriver.exe", "chrome", "chromedriver"]):
+                        # For Chrome processes, only kill those with specific profile paths
+                        if "chrome" in proc_name and "driver" not in proc_name:
+                            # Get command line to check for profile paths
+                            cmdline = ' '.join(proc.info['cmdline']).lower() if proc.info.get('cmdline') else ''
+                            
+                            # Only kill Chrome processes using our profiles
+                            if ('--user-data-dir=' in cmdline and 
+                                (self.profiles_dir.lower() in cmdline or 'c:/temp/' in cmdline)):
+                                proc.kill()
+                                killed_count += 1
+                                print(f"🗑️ Terminated Chrome process with PID {proc.pid}")
+                        # For chromedriver, we can terminate them all as they're likely ours
+                        elif "chromedriver" in proc_name:
+                            proc.kill()
+                            killed_count += 1
+                            print(f"🗑️ Terminated ChromeDriver process with PID {proc.pid}")
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
+            
+            print(f"✅ {killed_count} Chrome processes terminated.")
+            time.sleep(1)  # Give OS time to release resources
         except Exception as e:
             print(f"⚠️ Error killing Chrome processes: {e}")
             
@@ -719,9 +759,9 @@ class BrowserSessionManagerApp:
             except Exception as e:
                 print(f"⚠️ Warning: {e}")
             finally:
-                self.current_driver = None
                 # Ensure Chrome processes are killed
-                self.browser_manager.kill_chrome_processes()
+                self.browser_manager.kill_chrome_processes(current_driver=self.current_driver)
+                self.current_driver = None
                 
         # Move to next profile
         self.current_index += 1
@@ -794,7 +834,7 @@ class BrowserSessionManagerApp:
                 pass
                 
         # Kill any remaining Chrome processes
-        self.browser_manager.kill_chrome_processes()
+        self.browser_manager.kill_chrome_processes(current_driver=self.current_driver)
         
         # Restore stdout and destroy the window
         sys.stdout = sys.__stdout__
