@@ -739,6 +739,49 @@ class BrowserSessionManagerApp:
         # Clear the loading label
         self.loading_label.configure(text="")
             
+    def _check_for_dead_browser(self):
+        """Monitor if browser is still alive, handle it if manually closed."""
+        # Return early if no running browser or not running
+        if not self.current_driver or not self.is_running:
+            return
+            
+        try:
+            # Try a simple operation to check if browser is still responsive
+            # If this fails, it means the browser was likely closed manually
+            self.current_driver.current_url
+            # If we got here, browser is still alive, check again in 2 seconds
+            self.root.after(2000, self._check_for_dead_browser)
+        except Exception:
+            print("🔍 Detected that browser was closed manually")
+            # Browser closed manually - handle it gracefully
+            self.root.after(0, self._handle_closed_browser)
+    
+    def _handle_closed_browser(self):
+        """Handle browser that was closed manually."""
+        print("🛑 Browser was closed manually, cleaning up...")
+        
+        # Start cleanup in background thread
+        threading.Thread(
+            target=self._cleanup_browser_thread,
+            daemon=True
+        ).start()
+    
+    def _cleanup_browser_thread(self):
+        """Clean up browser in background thread to prevent UI from freezing."""
+        try:
+            # Kill any remaining Chrome processes
+            self.browser_manager.kill_chrome_processes(current_driver=self.current_driver)
+        except Exception as e:
+            print(f"⚠️ Error during cleanup: {e}")
+        finally:
+            # Update UI from main thread to avoid tkinter threading issues
+            self.root.after(0, lambda: self._finalize_browser_cleanup())
+            
+    def _finalize_browser_cleanup(self):
+        """Final steps after browser cleanup, runs in main thread."""
+        self.current_driver = None
+        self.run_next_profile()
+    
     def run_next_profile(self):
         """Process the next profile in the list."""
         # Stop any running animations first
@@ -746,23 +789,52 @@ class BrowserSessionManagerApp:
         
         # Close current browser if open
         if self.current_driver:
+            # Show message that we're closing browser
+            self.loading_label.configure(text=" 🔄 Closing browser...", text_color="#FFA500")
+            
+            # Start browser closing in background thread to prevent UI freezing
+            threading.Thread(
+                target=self._close_browser_thread,
+                daemon=True
+            ).start()
+        else:
+            # No browser open, proceed directly
+            self._proceed_to_next_profile()
+    
+    def _close_browser_thread(self):
+        """Close browser in background thread to prevent UI from freezing."""
+        try:
+            print("💾 Saving current session...")
             try:
-                print("💾 Saving current session...")
                 cookies = self.current_driver.get_cookies()
                 user_agent = self.current_driver.execute_script("return navigator.userAgent")
                 profile_id, _ = self.profiles_list[self.current_index]
                 self.db_manager.save_session(profile_id, user_agent, cookies)
+            except Exception as e:
+                print(f"⚠️ Warning during session save: {e}")
                 
-                # Close browser
-                print("🔚 Closing browser...")
+            # Close browser
+            print("🔚 Closing browser...")
+            try:
                 self.current_driver.quit()
             except Exception as e:
-                print(f"⚠️ Warning: {e}")
-            finally:
-                # Ensure Chrome processes are killed
-                self.browser_manager.kill_chrome_processes(current_driver=self.current_driver)
-                self.current_driver = None
+                print(f"⚠️ Warning during browser close: {e}")
                 
+            # Ensure Chrome processes are killed
+            self.browser_manager.kill_chrome_processes(current_driver=self.current_driver)
+        except Exception as e:
+            print(f"⚠️ Error during browser closing: {e}")
+        finally:
+            # Update UI from main thread to avoid tkinter threading issues
+            self.root.after(0, lambda: self._finalize_browser_close())
+            
+    def _finalize_browser_close(self):
+        """Final steps after browser close, runs in main thread."""
+        self.current_driver = None
+        self._proceed_to_next_profile()
+    
+    def _proceed_to_next_profile(self):
+        """Proceed to the next profile after cleanup is complete."""
         # Move to next profile
         self.current_index += 1
         
@@ -792,6 +864,8 @@ class BrowserSessionManagerApp:
                     self._stop_loading_animation()
                     # Set success message
                     self.loading_label.configure(text=" ✅ Browser ready", text_color="#4CAF50")
+                    # Start browser monitoring to detect if it's closed manually
+                    self.root.after(2000, self._check_for_dead_browser)
                     break
                 except Exception as e:
                     print(f"❌ Error launching browser for {profile_id}: {e}")

@@ -1,0 +1,7 @@
+profile_id,proxy
+profile1,
+profile2,123.456.789.012:8080
+profile3,user:pass@123.456.789.012:8080
+gmail_account1,
+gmail_account2,
+work_profile,
