@@ -512,47 +512,97 @@ def show_profiles_window():
         hover_color="#0056b3"
     ).pack(pady=10)
 
-def run_next_profile():
-    global current_driver, current_index
+def _close_browser_thread():
+    """Close browser in background thread to prevent UI from freezing."""
+    global current_driver
     
-    # Save current session before closing
+    # Save current session before closing if we have an active driver
     if current_driver:
         try:
-            print("💾 Saving current session...")
-            cookies = current_driver.get_cookies()
-            user_agent = current_driver.execute_script("return navigator.userAgent")
             profile_id, _ = profiles_list[current_index]
-            if save_session(profile_id, user_agent, cookies):
-                print(f"✅ Session saved for profile: {profile_id}")
-            else:
-                print(f"⚠️ Warning: Could not save session for {profile_id}")
+            print(f"💾 Saving session for {profile_id}...")
+            
+            try:
+                # Get cookies and user agent
+                cookies = current_driver.get_cookies()
+                user_agent = current_driver.execute_script("return navigator.userAgent")
+                
+                # Save to database
+                if save_session(profile_id, user_agent, cookies):
+                    print(f"✅ Session saved for profile: {profile_id}")
+                else:
+                    print(f"⚠️ Warning: Could not save session for {profile_id}")
+            except Exception as save_error:
+                print(f"⚠️ Session save error: {save_error}")
                 
             # Close browser
             print("🔚 Closing browser...")
-            current_driver.quit()
+            try:
+                current_driver.quit()
+            except Exception as quit_error:
+                print(f"⚠️ Browser quit error: {quit_error}")
+                
         except Exception as e:
-            print(f"⚠️ Warning: {e}")
+            print(f"⚠️ Browser close warning: {e}")
         finally:
-            current_driver = None
             # Ensure Chrome processes are killed
-            kill_chrome()
-
+            try:
+                kill_chrome()
+            except Exception as kill_error:
+                print(f"⚠️ Chrome kill error: {kill_error}")
+    
+    # Schedule UI updates from the main thread
+    root.after(100, _finalize_browser_close)
+    
+def _finalize_browser_close():
+    """Final steps after browser close, runs in main thread."""
+    global current_driver
+    
+    # Reset current driver
+    current_driver = None
+    # Stop loading animation if active
+    _stop_loading_animation()
+    
+    # Proceed to next profile
+    _proceed_to_next_profile()
+    
+def _proceed_to_next_profile():
+    """Proceed to the next profile after cleanup is complete."""
+    global current_index
+    
     # Move to next profile
     current_index += 1
     
     # Check if there are more profiles to process
     if current_index < len(profiles_list):
+        # Start loading animation for next profile
+        _start_loading_animation()
+        
+        # Start processing in a background thread
+        threading.Thread(target=_process_profile_thread, daemon=True).start()
+    else:
+        print("✅ All profiles processed.")
+        print("🎉 Browser Session Manager has completed processing all profiles.")
+
+def _process_profile_thread():
+    """Process the current profile in a background thread."""
+    global current_driver
+    
+    try:
         profile_id, proxy = profiles_list[current_index]
         print(f"\n🚀 Starting profile {current_index + 1}/{len(profiles_list)}: {profile_id}")
         print(f"🌐 Proxy: {proxy or 'None'}")
         
         # Set a maximum number of retries
         max_retries = 2
+        success = False
+        
         for retry in range(max_retries + 1):
             try:
                 print(f"🔄 Launching browser (attempt {retry + 1}/{max_retries + 1})...")
                 current_driver = launch_browser_return_driver(profile_id, proxy)
                 # If we get here, browser was launched successfully
+                success = True
                 break
             except Exception as e:
                 print(f"❌ Error launching browser for {profile_id}: {e}")
@@ -561,12 +611,33 @@ def run_next_profile():
                     time.sleep(3)
                 else:
                     print(f"⚠️ Failed to launch browser after {max_retries + 1} attempts. Skipping profile.")
-                    # Proceed to next profile
-                    run_next_profile()
-                    return
+        
+        # If we could not launch the browser successfully, move to next profile
+        if not success:
+            root.after(0, _finalize_browser_close)
+            return
+            
+        # Start browser monitoring
+        root.after(1000, _check_for_dead_browser)
+        
+        # Stop loading animation
+        root.after(0, _stop_loading_animation)
+        
+    except Exception as e:
+        print(f"❌ Error in profile processing: {e}")
+        root.after(0, _stop_loading_animation)
+
+def run_next_profile():
+    """User-initiated function to move to the next profile."""
+    # Start loading animation
+    _start_loading_animation()
+    
+    # Close current browser in background thread if it exists
+    if current_driver:
+        threading.Thread(target=_close_browser_thread, daemon=True).start()
     else:
-        print("✅ All profiles processed.")
-        print("🎉 Browser Session Manager has completed processing all profiles.")
+        # If no browser is running, proceed directly to next profile
+        _proceed_to_next_profile()
 
 def start_gui():
     def browse_file():
@@ -574,6 +645,123 @@ def start_gui():
         if path:
             file_path_var.set(path)
 
+    # Loading animation variables
+    loading_animation = None
+    loading_active = False
+    loading_label = None
+    animation_style = "spinner"  # options: "spinner", "dots", "blocks"
+    
+    def _start_loading_animation():
+        nonlocal loading_animation, loading_active, loading_label
+        
+        # Create a label for the animation if it doesn't exist
+        if loading_label is None:
+            loading_label = ctk.CTkLabel(
+                main_frame,
+                text="",
+                font=ctk.CTkFont(size=16),
+                text_color="#ffcc00"
+            )
+            loading_label.pack(pady=(5, 10))
+            
+        loading_active = True
+        
+        # Different animation styles
+        def animate():
+            if not loading_active:
+                loading_label.configure(text="")
+                return
+                
+            if animation_style == "spinner":
+                frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+                current_frame = int(time.time() * 10) % len(frames)
+                loading_label.configure(text=f"{frames[current_frame]} Loading browser session... Please wait")
+            elif animation_style == "dots":
+                frames = [".", "..", "...", "...."]
+                current_frame = int(time.time() * 2) % len(frames)
+                loading_label.configure(text=f"Loading browser session{frames[current_frame]}")
+            elif animation_style == "blocks":
+                frames = ["▰▱▱▱▱▱▱▱", "▰▰▱▱▱▱▱▱", "▰▰▰▱▱▱▱▱", "▰▰▰▰▱▱▱▱", 
+                         "▰▰▰▰▰▱▱▱", "▰▰▰▰▰▰▱▱", "▰▰▰▰▰▰▰▱", "▰▰▰▰▰▰▰▰"]
+                current_frame = int(time.time() * 3) % len(frames)
+                loading_label.configure(text=f"Loading: {frames[current_frame]}")
+            
+            # Schedule the next animation frame
+            loading_animation = root.after(100, animate)
+            
+        # Start the animation
+        animate()
+    
+    def _stop_loading_animation():
+        nonlocal loading_animation, loading_active
+        loading_active = False
+        if loading_animation:
+            root.after_cancel(loading_animation)
+            loading_animation = None
+        if loading_label:
+            loading_label.configure(text="")
+            
+    def _check_for_dead_browser():
+        """Monitor if browser is still alive, handle it if manually closed."""
+        global current_driver
+        
+        # If we have no browser instance, nothing to check
+        if current_driver is None:
+            return
+            
+        try:
+            # Try to get a simple property to check if browser is still accessible
+            current_driver.current_url
+            # If we get here, browser is still alive, schedule another check
+            root.after(2000, _check_for_dead_browser)
+        except Exception:
+            # Browser is no longer accessible, likely manually closed
+            print("⚠️ Browser appears to have been closed manually.")
+            _handle_closed_browser()
+            
+    def _handle_closed_browser():
+        """Handle browser that was closed manually."""
+        # Run cleanup in a background thread to prevent UI from freezing
+        threading.Thread(target=_cleanup_browser_thread, daemon=True).start()
+    
+    def _cleanup_browser_thread():
+        """Clean up browser in background thread to prevent UI from freezing."""
+        global current_driver
+        
+        try:
+            # Kill any remaining chrome processes
+            kill_chrome()
+            print("✅ Chrome processes cleaned up after manual browser closure.")
+        except Exception as e:
+            print(f"⚠️ Error during browser cleanup: {e}")
+        finally:
+            # Schedule UI updates from the main thread
+            root.after(100, _finalize_browser_cleanup)
+            
+    def _finalize_browser_cleanup():
+        """Final steps after browser cleanup, runs in main thread."""
+        global current_driver
+        
+        # Reset current driver
+        current_driver = None
+        # Stop loading animation if active
+        _stop_loading_animation()
+        print("🔄 Ready for the next operation.")
+            
+    def _process_next_profile_thread():
+        """Process the next profile in a background thread."""
+        try:
+            # Start browser monitoring
+            root.after(2000, _check_for_dead_browser)
+            
+            # Call the actual profile processing function
+            run_next_profile()
+        except Exception as e:
+            print(f"❌ Error in profile processing: {e}")
+        finally:
+            # Always stop the loading animation when done
+            root.after(0, _stop_loading_animation)
+    
     def run_process():
         csv_path = file_path_var.get()
         proxy_input = proxy_var.get().strip()
@@ -602,8 +790,11 @@ def start_gui():
         global current_index
         current_index = -1
         
-        # Start processing
-        run_next_profile()
+        # Start loading animation
+        _start_loading_animation()
+        
+        # Start processing in a background thread
+        threading.Thread(target=_process_next_profile_thread, daemon=True).start()
 
     def on_closing():
         global current_driver
