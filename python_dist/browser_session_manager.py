@@ -49,8 +49,12 @@ class TextLogger:
     def write(self, msg):
         """Write a message to the text widget and console."""
         if self.textbox:
+            # Enable the text widget temporarily to insert text
+            self.textbox.config(state=tk.NORMAL)
             self.textbox.insert(tk.END, msg)
             self.textbox.see(tk.END)
+            # Disable it again to make it read-only
+            self.textbox.config(state=tk.DISABLED)
         sys.__stdout__.write(msg)
 
     def flush(self):
@@ -138,6 +142,45 @@ class DatabaseManager:
                 return True
         except Exception as e:
             print(f"❌ DB Delete Error: {e}")
+            return False
+            
+    def rename_profile(self, old_profile_name, new_profile_name):
+        """Rename a profile in the database.
+        
+        Args:
+            old_profile_name (str): Current profile name
+            new_profile_name (str): New profile name
+            
+        Returns:
+            bool: True if rename was successful, False otherwise
+        """
+        try:
+            # First check if the old profile exists
+            with sqlite3.connect(self.db_path) as conn:
+                c = conn.cursor()
+                c.execute('SELECT * FROM sessions WHERE profile = ?', (old_profile_name,))
+                old_profile_data = c.fetchone()
+                
+                if not old_profile_data:
+                    print(f"❌ Profile not found: {old_profile_name}")
+                    return False
+                    
+                # Check if the new name already exists
+                c.execute('SELECT * FROM sessions WHERE profile = ?', (new_profile_name,))
+                if c.fetchone():
+                    print(f"❌ Cannot rename: Profile '{new_profile_name}' already exists")
+                    return False
+                    
+                # Update the profile name
+                c.execute('UPDATE sessions SET profile = ? WHERE profile = ?', 
+                          (new_profile_name, old_profile_name))
+                conn.commit()
+                
+                print(f"✅ Profile renamed from '{old_profile_name}' to '{new_profile_name}'")
+                return True
+                
+        except Exception as e:
+            print(f"❌ DB Rename Error: {e}")
             return False
 
 class APIManager:
@@ -413,8 +456,8 @@ class BrowserSessionManagerApp:
         # Create the main window
         self.root = ctk.CTk()
         self.root.title(f"Browser Session Manager v{APP_VERSION}")
-        self.root.geometry("900x800")  # Increased window size
-        self.root.minsize(800, 700)    # Set minimum window size
+        self.root.geometry("1000x900")  # Increased window size for bigger console
+        self.root.minsize(900, 800)    # Set minimum window size
         self.root.configure(fg_color="#2b2b2b")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         
@@ -532,7 +575,7 @@ class BrowserSessionManagerApp:
             button_center_frame,
             text="Start Processing",
             command=self.run_process,
-            width=200,
+            width=180,
             height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#28a745",
@@ -544,13 +587,25 @@ class BrowserSessionManagerApp:
             button_center_frame,
             text="Skip to Next Profile",
             command=self.run_next_profile,
-            width=200,
+            width=180,
             height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#007bff",
             hover_color="#0056b3"
         )
         self.next_button.pack(side="left", padx=5)
+        
+        self.list_profiles_button = ctk.CTkButton(
+            button_center_frame,
+            text="List/Edit Profiles",
+            command=self.show_profiles_window,
+            width=180,
+            height=40,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#9933CC",
+            hover_color="#7722AA"
+        )
+        self.list_profiles_button.pack(side="left", padx=5)
         
         # Progress Frame
         progress_frame = ctk.CTkFrame(self.main_frame, fg_color="#363636")
@@ -608,12 +663,13 @@ class BrowserSessionManagerApp:
         self.console = scrolledtext.ScrolledText(
             console_frame,
             wrap=tk.WORD,
-            height=15,
-            width=70,
-            font=("Consolas", 10),
+            height=25,  # Increased from 15 to 25 to show more lines
+            width=80,   # Increased width from 70 to 80
+            font=("Consolas", 11),  # Slightly larger font
             bg="#1e1e1e",
             fg="#ffffff",
-            insertbackground="#ffffff"
+            insertbackground="#ffffff",
+            state=tk.DISABLED  # Make it read-only to prevent UI freezing when clicking
         )
         self.console.pack(fill="both", expand=True, padx=10, pady=10)
         
@@ -895,6 +951,223 @@ class BrowserSessionManagerApp:
             print("🎉 Browser Session Manager has completed processing all profiles.")
             messagebox.showinfo("Complete", "All profiles have been processed.")
             
+    def show_profiles_window(self):
+        """Show a window with all saved profiles and options to edit them."""
+        # Get all profiles from the database
+        stored_profiles = self.db_manager.get_all_profiles()
+        
+        if not stored_profiles:
+            messagebox.showinfo("No Profiles", "No saved profiles found in the database.")
+            return
+            
+        # Create a new top-level window
+        profiles_window = ctk.CTkToplevel(self.root)
+        profiles_window.title("Saved Browser Profiles")
+        profiles_window.geometry("800x600")
+        profiles_window.grab_set()  # Make window modal
+        
+        # Create a frame for the profiles list
+        list_frame = ctk.CTkFrame(profiles_window, fg_color="#2b2b2b")
+        list_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Title
+        ctk.CTkLabel(
+            list_frame,
+            text="Saved Browser Profiles",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color="#ffffff"
+        ).pack(pady=(0, 20))
+        
+        # Instructions
+        ctk.CTkLabel(
+            list_frame,
+            text="Select a profile to view or edit. Right-click for more options.",
+            font=ctk.CTkFont(size=12),
+            text_color="#aaaaaa"
+        ).pack(pady=(0, 10))
+        
+        # Create frame for the table
+        table_frame = ctk.CTkFrame(list_frame, fg_color="#363636")
+        table_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Create a listbox with scrollbar for profiles
+        list_container = ctk.CTkFrame(table_frame, fg_color="transparent")
+        list_container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Listbox with custom styling
+        listbox = tk.Listbox(
+            list_container,
+            font=("Consolas", 12),
+            bg="#1e1e1e",
+            fg="#ffffff",
+            selectbackground="#28a745",
+            selectforeground="#ffffff",
+            width=50,
+            height=20,
+            exportselection=0,
+            activestyle="none"
+        )
+        listbox.pack(side="left", fill="both", expand=True)
+        
+        # Scrollbar
+        scrollbar = tk.Scrollbar(list_container)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Connect listbox and scrollbar
+        listbox.config(yscrollcommand=scrollbar.set)
+        scrollbar.config(command=listbox.yview)
+        
+        # Populate the listbox with profiles
+        for i, (profile_id, updated_at) in enumerate(stored_profiles):
+            # Format the date if it exists
+            if updated_at:
+                try:
+                    dt = datetime.fromisoformat(updated_at)
+                    formatted_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    formatted_date = updated_at
+            else:
+                formatted_date = "Unknown"
+                
+            listbox.insert(tk.END, f"{profile_id} (Last updated: {formatted_date})")
+        
+        # Dictionary to store edited profile names
+        edited_profiles = {}
+        
+        # Edit profile frame (initially hidden)
+        edit_frame = ctk.CTkFrame(list_frame, fg_color="#363636")
+        
+        # Widgets for edit frame
+        profile_var = tk.StringVar()
+        original_profile_var = tk.StringVar()
+        
+        ctk.CTkLabel(
+            edit_frame,
+            text="Edit Profile Name:",
+            font=ctk.CTkFont(size=14),
+            text_color="#ffffff"
+        ).pack(pady=(10, 5))
+        
+        edit_entry = ctk.CTkEntry(
+            edit_frame,
+            textvariable=profile_var,
+            width=300,
+            height=35,
+            font=ctk.CTkFont(size=14)
+        )
+        edit_entry.pack(pady=5)
+        
+        buttons_frame = ctk.CTkFrame(edit_frame, fg_color="transparent")
+        buttons_frame.pack(pady=10)
+        
+        def save_edited_profile():
+            original = original_profile_var.get()
+            new_name = profile_var.get().strip()
+            
+            if not new_name:
+                messagebox.showerror("Error", "Profile name cannot be empty.")
+                return
+                
+            if original != new_name:
+                # Store the edited name
+                edited_profiles[original] = new_name
+                
+                # Update the listbox
+                selected_index = listbox.curselection()[0]
+                current_text = listbox.get(selected_index)
+                date_part = current_text.split("(Last updated:")[1].strip()
+                new_text = f"{new_name} (Last updated: {date_part}"
+                listbox.delete(selected_index)
+                listbox.insert(selected_index, new_text)
+                
+                # Hide edit frame and show success message
+                edit_frame.pack_forget()
+                messagebox.showinfo("Success", f"Profile name changed from '{original}' to '{new_name}'.\n\nChanges will be saved when you close this window.")
+        
+        def cancel_edit():
+            edit_frame.pack_forget()
+        
+        # Save and Cancel buttons
+        ctk.CTkButton(
+            buttons_frame,
+            text="Save Changes",
+            command=save_edited_profile,
+            width=150,
+            height=35,
+            font=ctk.CTkFont(size=12),
+            fg_color="#28a745",
+            hover_color="#218838"
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            buttons_frame,
+            text="Cancel",
+            command=cancel_edit,
+            width=150,
+            height=35,
+            font=ctk.CTkFont(size=12),
+            fg_color="#dc3545",
+            hover_color="#c82333"
+        ).pack(side="left", padx=5)
+        
+        # Handle double click on a profile
+        def on_profile_double_click(event):
+            try:
+                # Get the selected item
+                selection = listbox.curselection()[0]
+                value = listbox.get(selection)
+                profile_id = value.split(" (Last updated:")[0]
+                
+                # Set up editing
+                original_profile_var.set(profile_id)
+                profile_var.set(profile_id)
+                
+                # Show edit frame
+                edit_frame.pack(fill="x", padx=10, pady=10)
+                edit_entry.focus_set()
+            except (IndexError, Exception) as e:
+                print(f"Error selecting profile: {e}")
+        
+        # Bind double click event
+        listbox.bind("<Double-1>", on_profile_double_click)
+        
+        # Button frame at the bottom
+        bottom_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
+        bottom_frame.pack(fill="x", pady=10)
+        
+        def close_and_save():
+            # Save all edited profiles
+            if edited_profiles:
+                for original, new_name in edited_profiles.items():
+                    try:
+                        # We need to implement a rename operation in the database
+                        if hasattr(self.db_manager, 'rename_profile'):
+                            success = self.db_manager.rename_profile(original, new_name)
+                            if success:
+                                print(f"✅ Profile renamed: {original} → {new_name}")
+                            else:
+                                print(f"❌ Failed to rename profile: {original}")
+                    except Exception as e:
+                        print(f"❌ Error renaming profile {original}: {e}")
+                
+                # Let the user know
+                print(f"✅ Saved {len(edited_profiles)} renamed profiles.")
+                
+            # Close the window
+            profiles_window.destroy()
+        
+        # Close button
+        ctk.CTkButton(
+            bottom_frame,
+            text="Close",
+            command=close_and_save,
+            width=200,
+            height=40,
+            font=ctk.CTkFont(size=14),
+            fg_color="#007bff",
+            hover_color="#0056b3"
+        ).pack(pady=10)
+
     def on_close(self):
         """Handle window close event."""
         # Stop any running animations
