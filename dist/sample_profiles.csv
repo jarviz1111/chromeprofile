@@ -1,7 +1,4 @@
-profile_id,proxy
-profile1,
-profile2,123.456.789.012:8080
-profile3,user:pass@123.456.789.012:8080
-gmail_account1,
-gmail_account2,
-work_profile,
+profile_id,proxy,email,password
+gmail_account1,123.45.67.89:8080,example1@gmail.com,password123
+yahoo_account1,,yahoo_user@yahoo.com,securepass456
+outlook_account1,user:pass@11.22.33.44:8080,business@outlook.com,office789

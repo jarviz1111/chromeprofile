@@ -1,0 +1,42 @@
+/* Styles for the information display */
+#bsm-info-display {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#bsm-info-display:hover {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+#bsm-info-display.minimized {
+  height: 20px;
+  overflow: hidden;
+}
+
+/* Custom tooltip styles */
+.bsm-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.bsm-tooltip .bsm-tooltip-text {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.bsm-tooltip:hover .bsm-tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}

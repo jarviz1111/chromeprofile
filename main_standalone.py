@@ -21,6 +21,18 @@ import sys
 import psutil
 import customtkinter as ctk
 
+# Import our session utilities
+try:
+    from utils.session_utils import (
+        init_db, save_enhanced_session, load_enhanced_session, 
+        get_all_profiles, delete_profile, rename_profile
+    )
+    print("✅ Imported enhanced session utilities.")
+    using_enhanced_session_utils = True
+except ImportError:
+    print("⚠️ Enhanced session utilities not found. Using built-in functions.")
+    using_enhanced_session_utils = False
+
 DB_PATH = 'browser_sessions.db'
 LOGIN_URL = "https://accounts.google.com/signup"
 
@@ -349,11 +361,22 @@ def launch_browser_return_driver(profile_id, proxy=None):
     options.add_argument(f"--user-agent={user_agent}")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
-    options.add_argument("--disable-extensions")
+    
+    # Do not disable extensions since we want to load our info display extension
+    # options.add_argument("--disable-extensions")
+    
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument(f"--user-data-dir={user_data_dir}")
+    
+    # Load our extension for displaying user agent and IP
+    extension_path = os.path.abspath("extensions/info_display")
+    if os.path.exists(extension_path):
+        print(f"📋 Loading browser info extension from: {extension_path}")
+        options.add_argument(f"--load-extension={extension_path}")
+    else:
+        print("⚠️ Browser info extension not found. Info overlay will not be available.")
     
     # More anti-detection arguments
     options.add_argument("--disable-features=IsolateOrigins,site-per-process")
@@ -775,8 +798,16 @@ def show_profiles_window():
     listbox.config(yscrollcommand=scrollbar.set)
     scrollbar.config(command=listbox.yview)
     
-    # Populate the listbox with profiles
-    for i, (profile_id, updated_at) in enumerate(stored_profiles):
+    # Populate the listbox with profiles and additional information
+    for i, profile_data in enumerate(stored_profiles):
+        # Extract all available data
+        profile_id = profile_data[0]
+        updated_at = profile_data[1]
+        email = profile_data[2] if len(profile_data) > 2 else None
+        login_domain = profile_data[3] if len(profile_data) > 3 else None
+        login_count = profile_data[4] if len(profile_data) > 4 else None
+        last_login_time = profile_data[5] if len(profile_data) > 5 else None
+        
         # Format the date if it exists
         if updated_at:
             try:
@@ -787,7 +818,23 @@ def show_profiles_window():
         else:
             formatted_date = "Unknown"
             
-        listbox.insert(tk.END, f"{profile_id} (Last updated: {formatted_date})")
+        # Build the display string with all available information
+        display_text = f"{profile_id}"
+        
+        if email:
+            # Only show part of the email for privacy
+            email_preview = f"{email[:3]}...@{email.split('@')[1]}" if '@' in email else f"{email[:3]}..."
+            display_text += f" ({email_preview})"
+            
+        if login_domain:
+            display_text += f" [{login_domain}]"
+            
+        if login_count and int(login_count) > 0:
+            display_text += f" - {login_count} logins"
+            
+        display_text += f" - Updated: {formatted_date}"
+            
+        listbox.insert(tk.END, display_text)
     
     # Dictionary to store edited profile names
     edited_profiles = {}
@@ -833,8 +880,15 @@ def show_profiles_window():
             # Update the listbox
             selected_index = listbox.curselection()[0]
             current_text = listbox.get(selected_index)
-            date_part = current_text.split("(Last updated:")[1].strip()
-            new_text = f"{new_name} (Last updated: {date_part}"
+            
+            # Extract profile ID from the beginning of the text
+            original_profile = current_text.split(" ")[0]
+            
+            # Replace the first word (the profile ID) with the new name
+            # while keeping all the additional info
+            new_text = current_text.replace(original_profile, new_name, 1)
+            
+            # Update the listbox
             listbox.delete(selected_index)
             listbox.insert(selected_index, new_text)
             
@@ -874,7 +928,9 @@ def show_profiles_window():
             # Get the selected item
             selection = listbox.curselection()[0]
             value = listbox.get(selection)
-            profile_id = value.split(" (Last updated:")[0]
+            
+            # Extract the profile ID (first word in the entry)
+            profile_id = value.split(" ")[0]
             
             # Set up editing
             original_profile_var.set(profile_id)

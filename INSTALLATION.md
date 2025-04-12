@@ -1,70 +1,129 @@
-# Browser Session Manager Desktop Application
+# Browser Session Manager Installation Guide
 
-## Installation Instructions
+This guide will help you install and get started with the Browser Session Manager, a tool for managing browser sessions, profiles, and automating browser interactions.
 
-### Prerequisites
-- Node.js 16 or above
-- NPM 7 or above
+## System Requirements
 
-### Installation Methods
+- **Operating System**: Windows, macOS, or Linux
+- **Python**: Version 3.8 or higher
+- **Chrome/Chromium**: Latest version recommended
+- **Disk Space**: At least 100 MB for the application and additional space for browser profiles
 
-#### 1. Download the Pre-built Installer (Recommended)
+## Installation Steps
 
-1. Download the appropriate installer for your operating system:
-   - Windows: `BrowserSessionManager-Setup-1.0.0.exe`
-   - macOS: `BrowserSessionManager-1.0.0.dmg`
-   - Linux: `browser-session-manager_1.0.0_amd64.deb` or `browser-session-manager-1.0.0.AppImage`
+### 1. Install Python
 
-2. Run the installer and follow the on-screen instructions.
+If you don't have Python 3.8+ installed:
 
-3. Launch the application from your Start Menu/Applications folder.
+- **Windows**: Download and run the installer from [python.org](https://www.python.org/downloads/)
+- **macOS**: Use Homebrew (`brew install python3`) or download from [python.org](https://www.python.org/downloads/)
+- **Linux**: Use your package manager (`apt install python3 python3-pip` for Ubuntu/Debian)
 
-#### 2. Manual Installation from Source
+### 2. Clone or Download the Repository
 
-1. Extract the source files from the distribution package.
-
-2. Install the dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the application:
-   ```bash
-   npm start
-   ```
-
-   Or for desktop mode:
-   ```bash
-   npm run start-desktop
-   ```
-
-### Linux-specific Notes
-
-For Linux systems, you may need to install additional dependencies for Chromium:
+Download the latest version:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2
+git clone https://github.com/yourusername/browser-session-manager.git
+cd browser-session-manager
 ```
 
-### macOS-specific Notes
+Alternatively, download the ZIP file and extract it.
 
-On macOS, you might need to allow the app in System Preferences > Security & Privacy if you get a security warning when trying to open the app for the first time.
+### 3. Install Dependencies
 
-### Windows-specific Notes
+```bash
+pip install -r dependencies.txt
+```
 
-On Windows, the installer will prompt you to create a desktop shortcut during installation.
+Or install the dependencies individually:
 
-## Usage Notes
+```bash
+pip install undetected-chromedriver selenium fake-useragent customtkinter requests psutil ttkthemes
+```
 
-- The application requires an internet connection for API verification.
-- Browser automation features work best with a stable internet connection.
-- For best results, use with proxy services that support HTTP proxies.
+Or use the included convenience script:
 
-## Support
+```bash
+# On Windows
+run_cli.bat
 
-For support inquiries, please contact support@inboxinnovations.org
+# On macOS/Linux
+chmod +x run_cli.sh
+./run_cli.sh
+```
 
-## License
+These scripts will check for and install any missing dependencies.
 
-This software is proprietary. See the included license file for details.
+### 4. Run the Application
+
+#### GUI Mode:
+
+```bash
+python main_standalone.py
+```
+
+#### Command-Line Mode:
+
+```bash
+# List all saved profiles
+./run_cli.sh list
+
+# Launch a browser with a profile
+./run_cli.sh launch --profile your_profile_name
+```
+
+On Windows, use `run_cli.bat` instead of `./run_cli.sh`.
+
+## Configuration
+
+### Setting Up Profiles
+
+1. **CSV Import**: Create a CSV file with the following columns:
+   ```
+   profile_id,proxy,email,password
+   ```
+   Example: `sample_profiles.csv` is included as a template.
+
+2. **Manual Setup**: Use the GUI to create and manage profiles.
+
+3. **CLI Setup**: Launch a browser and log in manually, then the session will be saved.
+
+### Chrome Extension
+
+The included Chrome extension will be automatically loaded when launching browsers through the Session Manager. It displays browser fingerprinting information in a floating panel.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **ChromeDriver Issues**:
+   - Make sure you have Chrome/Chromium installed
+   - Try launching with the `--headless` flag for servers without a display
+   - The application will attempt to download the appropriate ChromeDriver version
+
+2. **Dependencies Installation**:
+   - If you encounter errors related to missing modules, run:
+     ```bash
+     pip install -r dependencies.txt
+     ```
+
+3. **Profile Database**:
+   - If encountering database errors, try:
+     ```bash
+     python utils/update_db_schema.py
+     ```
+
+## Getting Support
+
+If you encounter issues or need help:
+
+- Check the README.md file for detailed usage instructions
+- Run `./run_cli.sh` (or `run_cli.bat` on Windows) without arguments for a list of commands
+- File an issue on the project's GitHub repository
+
+## Security Notes
+
+- Passwords for profiles are stored in plain text in the local database by default
+- Consider running in a secure environment if storing sensitive credentials
+- API credentials are only used for verification and aren't stored permanently
